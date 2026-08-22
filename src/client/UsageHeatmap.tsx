@@ -160,73 +160,87 @@ function buildGrid(days: HistoryDay[], windowDays: number): { cells: GridCell[];
  * weekdays and columns are weeks, with a month label row on top. Color
  * intensity scales with that day's token consumption relative to the peak day
  * in the window; hovering a cell shows its date and exact token count.
+ *
+ * The grid uses CSS Grid so every column stretches to share the container
+ * width — 53 weeks fit one screen with no horizontal scrollbar, regardless of
+ * the settings panel width. Cells keep a square shape via `aspect-ratio: 1`.
  */
 export function TokenHeatmap({ days }: { days: HistoryDay[] }) {
   const max = useMemo(() => days.reduce((acc, d) => Math.max(acc, d.tokens), 0), [days])
   const { cells, monthLabels } = useMemo(() => buildGrid(days, 365), [days])
   const colCount = Math.ceil(cells.length / 7)
 
+  // Map cell index → grid cell (col, row). Grid row 0 = month labels, rows
+  // 1..7 = Sun..Sat; grid col 0 = weekday labels, cols 1..N = week columns.
+  const gridByIndex = (index: number): { col: number; row: number } => ({
+    col: Math.floor(index / 7) + 1,
+    row: (index % 7) + 1,
+  })
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      {/* Month labels row: one label per column, placed at the column's x. */}
-      <div style={{ position: 'relative', height: 16, marginLeft: 34 }}>
-        {monthLabels.map(({ col, label }) => (
-          <span
-            key={col}
-            style={{
-              position: 'absolute',
-              left: col * 14,
-              fontSize: 11,
-              lineHeight: '16px',
-              color: 'var(--dsw-alias-label-tertiary)',
-            }}
-          >
-            {label}
-          </span>
-        ))}
-      </div>
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: `34px repeat(${colCount}, minmax(0, 1fr))`,
+        gridAutoRows: 'auto',
+        columnGap: 2,
+        rowGap: 2,
+        alignItems: 'stretch',
+      }}
+    >
+      {/* Month labels (row 0): each sits in the column containing the month's 1st. */}
+      {monthLabels.map(({ col, label }) => (
+        <span
+          key={label}
+          style={{
+            gridColumn: `${col + 1} / span 1`,
+            gridRow: 1,
+            fontSize: 10,
+            lineHeight: '14px',
+            color: 'var(--dsw-alias-label-tertiary)',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+          }}
+        >
+          {label}
+        </span>
+      ))}
 
-      <div style={{ display: 'flex', gap: 4 }}>
-        {/* Weekday labels column. */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 3, width: 30 }}>
-          {WEEKDAY_NAMES.map((name, row) => (
-            <span
-              key={name}
-              style={{
-                height: 11,
-                fontSize: 10,
-                lineHeight: '11px',
-                color: 'var(--dsw-alias-label-tertiary)',
-                // GitHub shows every other weekday label to reduce noise.
-                opacity: row % 2 === 1 ? 1 : 0.55,
-              }}
-            >
-              {name}
-            </span>
-          ))}
-        </div>
+      {/* Weekday labels (column 0): rows 1..7 = Sun..Sat. */}
+      {WEEKDAY_NAMES.map((name, row) => (
+        <span
+          key={name}
+          style={{
+            gridColumn: 1,
+            gridRow: row + 1,
+            fontSize: 9,
+            lineHeight: '12px',
+            color: 'var(--dsw-alias-label-tertiary)',
+            alignSelf: 'center',
+            opacity: row % 2 === 1 ? 1 : 0.55,
+          }}
+        >
+          {name}
+        </span>
+      ))}
 
-        {/* Cells laid out in weekday rows × week columns. */}
-        <div style={{ display: 'flex', gap: 3, overflowX: 'auto', paddingBottom: 4 }}>
-          {Array.from({ length: colCount }, (_, col) => (
-            <div key={col} style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-              {Array.from({ length: 7 }, (_, row) => {
-                const index = col * 7 + row
-                const cell = index < cells.length ? cells[index] : null
-                const level = cell === null ? 0 : heatLevel(cell.tokens, max)
-                return <Cell key={row} cell={cell} level={level} />
-              })}
-            </div>
-          ))}
-        </div>
-      </div>
+      {/* Day cells. */}
+      {cells.map((cell, index) => {
+        const { col, row } = gridByIndex(index)
+        const level = heatLevel(cell.tokens, max)
+        return (
+          <div key={index} style={{ gridColumn: col, gridRow: row }}>
+            <Cell cell={cell} level={level} />
+          </div>
+        )
+      })}
     </div>
   )
 }
 
 function Cell({ cell, level }: { cell: GridCell | null; level: number }) {
   if (cell === null || cell.future) {
-    return <span style={{ width: 11, height: 11, borderRadius: 2, background: 'transparent' }} />
+    return <span style={{ display: 'block', width: '100%', aspectRatio: '1', borderRadius: 2, background: 'transparent' }} />
   }
   const label = `${cell.date} · ${formatTokensFull(cell.tokens)} tokens`
   return (
@@ -234,8 +248,8 @@ function Cell({ cell, level }: { cell: GridCell | null; level: number }) {
       <span
         style={{
           display: 'block',
-          width: 11,
-          height: 11,
+          width: '100%',
+          aspectRatio: '1',
           borderRadius: 2,
           background: LEVEL_COLORS[level],
           opacity: level === 0 ? 0.35 : 1,
