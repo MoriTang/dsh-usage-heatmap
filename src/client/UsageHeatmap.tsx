@@ -164,39 +164,41 @@ function buildGrid(days: HistoryDay[], windowDays: number): { cells: GridCell[];
  * The grid uses CSS Grid so every column stretches to share the container
  * width — 53 weeks fit one screen with no horizontal scrollbar, regardless of
  * the settings panel width. Cells keep a square shape via `aspect-ratio: 1`.
+ *
+ * Grid coordinate system (1-based):
+ * - column 1 = weekday label gutter, columns 2..N+1 = week columns
+ * - row 1 = month label row, rows 2..8 = Sun..Sat
  */
 export function TokenHeatmap({ days }: { days: HistoryDay[] }) {
   const max = useMemo(() => days.reduce((acc, d) => Math.max(acc, d.tokens), 0), [days])
   const { cells, monthLabels } = useMemo(() => buildGrid(days, 365), [days])
   const colCount = Math.ceil(cells.length / 7)
 
-  // Map cell index → grid cell (col, row). Grid row 0 = month labels, rows
-  // 1..7 = Sun..Sat; grid col 0 = weekday labels, cols 1..N = week columns.
-  const gridByIndex = (index: number): { col: number; row: number } => ({
-    col: Math.floor(index / 7) + 1,
-    row: (index % 7) + 1,
-  })
+  // 0-based week index → 1-based grid column (skip the weekday gutter column).
+  const weekCol = (week: number): number => week + 2
+  // 0-based weekday (0=Sun) → 1-based grid row (skip the month label row).
+  const weekdayRow = (weekday: number): number => weekday + 2
 
   return (
     <div
       style={{
         display: 'grid',
-        gridTemplateColumns: `34px repeat(${colCount}, minmax(0, 1fr))`,
+        gridTemplateColumns: `30px repeat(${colCount}, minmax(0, 1fr))`,
         gridAutoRows: 'auto',
-        columnGap: 2,
-        rowGap: 2,
+        columnGap: 1,
+        rowGap: 1,
         alignItems: 'stretch',
       }}
     >
-      {/* Month labels (row 0): each sits in the column containing the month's 1st. */}
+      {/* Month labels (row 1): each sits in the column containing the month's 1st. */}
       {monthLabels.map(({ col, label }) => (
         <span
           key={label}
           style={{
-            gridColumn: `${col + 1} / span 1`,
+            gridColumn: `${weekCol(col)} / span 1`,
             gridRow: 1,
-            fontSize: 10,
-            lineHeight: '14px',
+            fontSize: 9,
+            lineHeight: '12px',
             color: 'var(--dsw-alias-label-tertiary)',
             whiteSpace: 'nowrap',
             overflow: 'hidden',
@@ -206,18 +208,18 @@ export function TokenHeatmap({ days }: { days: HistoryDay[] }) {
         </span>
       ))}
 
-      {/* Weekday labels (column 0): rows 1..7 = Sun..Sat. */}
-      {WEEKDAY_NAMES.map((name, row) => (
+      {/* Weekday labels (column 1): rows 2..8 = Sun..Sat. */}
+      {WEEKDAY_NAMES.map((name, weekday) => (
         <span
           key={name}
           style={{
             gridColumn: 1,
-            gridRow: row + 1,
-            fontSize: 9,
-            lineHeight: '12px',
+            gridRow: weekdayRow(weekday),
+            fontSize: 8,
+            lineHeight: '10px',
             color: 'var(--dsw-alias-label-tertiary)',
             alignSelf: 'center',
-            opacity: row % 2 === 1 ? 1 : 0.55,
+            opacity: weekday % 2 === 1 ? 1 : 0.55,
           }}
         >
           {name}
@@ -226,10 +228,11 @@ export function TokenHeatmap({ days }: { days: HistoryDay[] }) {
 
       {/* Day cells. */}
       {cells.map((cell, index) => {
-        const { col, row } = gridByIndex(index)
+        const week = Math.floor(index / 7)
+        const weekday = index % 7
         const level = heatLevel(cell.tokens, max)
         return (
-          <div key={index} style={{ gridColumn: col, gridRow: row }}>
+          <div key={index} style={{ gridColumn: weekCol(week), gridRow: weekdayRow(weekday) }}>
             <Cell cell={cell} level={level} />
           </div>
         )
@@ -239,8 +242,13 @@ export function TokenHeatmap({ days }: { days: HistoryDay[] }) {
 }
 
 function Cell({ cell, level }: { cell: GridCell | null; level: number }) {
-  if (cell === null || cell.future) {
+  if (cell === null) {
     return <span style={{ display: 'block', width: '100%', aspectRatio: '1', borderRadius: 2, background: 'transparent' }} />
+  }
+  // Future cells (padding to complete the last week) still draw a visible
+  // level-0 square so the calendar rectangle stays complete.
+  if (cell.future) {
+    return <span style={{ display: 'block', width: '100%', aspectRatio: '1', borderRadius: 2, background: LEVEL_COLORS[0], opacity: 0.35 }} />
   }
   const label = `${cell.date} · ${formatTokensFull(cell.tokens)} tokens`
   return (
