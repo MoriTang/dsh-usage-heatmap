@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import { SummaryCards, TokenHeatmap, formatTokens, useHistory } from './UsageHeatmap.tsx'
+import { HeatmapLegend, SummaryCards, TokenHeatmap, formatTokens, useHistory } from './UsageHeatmap.tsx'
 
 /** Props: settings-section owner share (close affordance, unused here). */
 export interface UsageHeatmapSectionProps {
@@ -54,7 +54,7 @@ export const UsageHeatmapSection = memo(function UsageHeatmapSection(_props: Usa
       <div style={blockStyle}>
         <h3 style={headingStyle}>Daily token consumption</h3>
         <TokenHeatmap days={payload.days} />
-        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 12 }}>
           <span style={captionStyle}>
             {payload.days.length === 0
               ? 'No usage recorded yet.'
@@ -64,6 +64,7 @@ export const UsageHeatmapSection = memo(function UsageHeatmapSection(_props: Usa
             <span style={captionStyle}>{`${first.date} → ${last.date}`}</span>
           )}
         </div>
+        <HeatmapLegend />
       </div>
 
       {payload.lastError !== null && payload.lastError !== undefined && (

@@ -70,14 +70,31 @@ function formatTokensFull(n: number): string {
   return n.toLocaleString('en-US')
 }
 
-/** GitHub-style contribution color levels (0 → none … 4 → darkest). */
-function heatLevel(value: number, max: number): number {
+/**
+ * Fixed log-scale level buckets so a cell's color always means the same token
+ * magnitude (unlike a peak-relative scale, where colors shift as data grows).
+ * GitHub contributions uses a similar fixed legend.
+ */
+const LEVEL_THRESHOLDS = [10_000, 1_000_000, 50_000_000] as const
+
+/** Level for a token count: 0 = none, then 1..4 by the fixed thresholds. */
+function heatLevel(value: number): number {
   if (value <= 0) return 0
-  const ratio = max <= 0 ? 0 : value / max
-  if (ratio < 0.25) return 1
-  if (ratio < 0.5) return 2
-  if (ratio < 0.75) return 3
+  if (value < LEVEL_THRESHOLDS[0]) return 1
+  if (value < LEVEL_THRESHOLDS[1]) return 2
+  if (value < LEVEL_THRESHOLDS[2]) return 3
   return 4
+}
+
+/** Human label for one legend bucket (level 1..4, or the "Less"/"More" anchors). */
+function levelRangeLabel(level: number): string {
+  switch (level) {
+    case 1: return `< ${formatTokens(LEVEL_THRESHOLDS[0])}`
+    case 2: return `${formatTokens(LEVEL_THRESHOLDS[0])}–${formatTokens(LEVEL_THRESHOLDS[1])}`
+    case 3: return `${formatTokens(LEVEL_THRESHOLDS[1])}–${formatTokens(LEVEL_THRESHOLDS[2])}`
+    case 4: return `≥ ${formatTokens(LEVEL_THRESHOLDS[2])}`
+    default: return ''
+  }
 }
 
 const LEVEL_COLORS = [
@@ -170,7 +187,6 @@ function buildGrid(days: HistoryDay[], windowDays: number): { cells: GridCell[];
  * - row 1 = month label row, rows 2..8 = Sun..Sat
  */
 export function TokenHeatmap({ days }: { days: HistoryDay[] }) {
-  const max = useMemo(() => days.reduce((acc, d) => Math.max(acc, d.tokens), 0), [days])
   const { cells, monthLabels } = useMemo(() => buildGrid(days, 365), [days])
   const colCount = Math.ceil(cells.length / 7)
 
@@ -241,13 +257,41 @@ export function TokenHeatmap({ days }: { days: HistoryDay[] }) {
       {cells.map((cell, index) => {
         const week = Math.floor(index / 7)
         const weekday = index % 7
-        const level = heatLevel(cell.tokens, max)
+        const level = heatLevel(cell.tokens)
         return (
           <div key={index} style={{ gridColumn: weekCol(week), gridRow: weekdayRow(weekday) }}>
             <Cell cell={cell} level={level} />
           </div>
         )
       })}
+    </div>
+  )
+}
+
+/**
+ * Legend matching GitHub contributions: "Less" on the left, the five color
+ * swatches, "More" on the right. Each swatch's hover shows its token range.
+ */
+export function HeatmapLegend() {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 9, lineHeight: '12px', color: 'var(--dsw-alias-label-tertiary)' }}>
+      <span>Less</span>
+      {[1, 2, 3, 4].map(level => (
+        <Tooltip key={level} label={`${levelRangeLabel(level)} tokens`} side="top">
+          <span
+            style={{
+              display: 'block',
+              width: 11,
+              height: 11,
+              borderRadius: 2,
+              background: LEVEL_COLORS[level],
+              border: '1px solid var(--dsw-alias-border-l1)',
+              boxSizing: 'border-box',
+            }}
+          />
+        </Tooltip>
+      ))}
+      <span>More</span>
     </div>
   )
 }
