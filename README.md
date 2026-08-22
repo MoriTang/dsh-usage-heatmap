@@ -89,29 +89,43 @@ pnpm dsh plugin --profile web add /Users/mori/src/dsh/plugins/usage-heatmap
         refreshMs: 60000
         historyDays: 90
         pricing:
-          inputPerM: 2
-          outputPerM: 8
-          cacheReadPerM: 0.5
-          cacheWritePerM: 2
+          inputMissPeakPerM: 9.0
+          inputMissOffPerM: 4.5
+          inputHitPeakPerM: 0.30
+          inputHitOffPerM: 0.15
+          outputPeakPerM: 27.0
+          outputOffPerM: 13.5
 ```
 
 保存后 host 半热加载；刷新浏览器页面，设置菜单即出现「Usage & Cost」项。
 
 ## 配置
 
+价格按 DeepSeek 官方**峰谷计价**模型（deepseek-v4-pro，每百万 token）：
+
+- **高峰时段**：北京时间工作日 9:00–12:00、14:00–18:00（周末全天空闲，规则自 2026-08-23 生效）。
+- **输入区分缓存命中/未命中**，输入与输出分别计价。
+
 | 字段 | 默认 | 说明 |
 |---|---|---|
-| `pricing.inputPerM` | `2` | 未缓存输入，每百万 token 价格（`currency` 单位） |
-| `pricing.outputPerM` | `8` | 输出，每百万 token 价格 |
-| `pricing.cacheReadPerM` | `0.5` | 缓存命中读取，每百万 token 价格 |
-| `pricing.cacheWritePerM` | `2` | 缓存写入，每百万 token 价格 |
+| `pricing.inputMissPeakPerM` | `9.0` | 缓存未命中输入，高峰（¥/M） |
+| `pricing.inputMissOffPerM` | `4.5` | 缓存未命中输入，空闲（¥/M） |
+| `pricing.inputHitPeakPerM` | `0.30` | 缓存命中输入，高峰（¥/M） |
+| `pricing.inputHitOffPerM` | `0.15` | 缓存命中输入，空闲（¥/M） |
+| `pricing.outputPeakPerM` | `27.0` | 输出，高峰（¥/M） |
+| `pricing.outputOffPerM` | `13.5` | 输出，空闲（¥/M） |
 | `currency` | `¥` | 价格与显示使用的货币符号 |
 | `apiKeyEnv` | `DEEPSEEK_API_KEY` | API key 的凭证引用（环境变量名） |
 | `baseURL` | `https://api.deepseek.com` | API 端点基址，`/user/balance` 追加其后 |
 | `refreshMs` | `60000` | 余额刷新间隔（毫秒） |
 | `historyDays` | `90` | 热力图展示的最近天数 |
 
-价格表请对照 DeepSeek 当前官方价目调整；改配置保存即热生效（host 半）。
+> 价格以 [DeepSeek 官方价目](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/)
+> 为准，会随时间调整；改动 `pricing` 保存即热生效（config-only HMR），无需重启。
+
+**成本计算方式**：历史持久化的是**分桶 token 数**（按天 × 峰谷 × 命中/未命中 × 输入/输出），
+`cost` 在读取时由当前 `pricing` 动态计算，因此修正价格会**自动重算全部历史**，
+不会把旧价格固化进历史数据。
 
 ## 验证
 
@@ -123,9 +137,10 @@ pnpm dsh plugin --profile web add /Users/mori/src/dsh/plugins/usage-heatmap
 
 ## 已知限制
 
-- **改 client 源码需重启**：web profile 禁用了模块级 HMR，修改
-  `src/client/*` 后需重启 `dsh web` 并刷新页面；host 半与
-  `cordis.patch.yml` 配置编辑可热重载。
+- **改 client 源码刷新页面即可，改 host 源码需重启**：web profile 禁用了模块级
+  HMR，修改 `src/client/*` 后重新构建并**刷新浏览器页面**即生效；修改 host 半
+  （`src/index.ts`、`src/daily-usage.ts`）需重启 `dsh web`。`cordis.patch.yml`
+  配置编辑（含 `pricing`）可热重载，无需重启。
 - **金额是估算**：单价由 `pricing` 配置决定，按 provider 上报的 token 精确
   计算，但价格本身需随官方价目手动维护；不保证与账单完全一致。
 - **历史只从插件启用后累计**：仅记录插件挂载期间提交的 usage 事件；
