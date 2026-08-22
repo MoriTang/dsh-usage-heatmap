@@ -1,0 +1,51 @@
+{
+  "name": "dsh-usage-heatmap",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Out-of-tree DeepSeek Harness plugin: a settings page with a GitHub-style daily token-consumption heat map plus balance and cost summary.",
+  "dependencies": {
+    "@deepseek-ai/cordis": "link:../../../deepseek-harness/vendor/cordis",
+    "@deepseek-ai/dsh-atomic-write": "link:../../../deepseek-harness/packages/util/atomic-write",
+    "@deepseek-ai/dsh-credentials": "link:../../../deepseek-harness/packages/credentials/credentials",
+    "@deepseek-ai/dsh-home-paths": "link:../../../deepseek-harness/packages/util/home-paths",
+    "@deepseek-ai/dsh-host-webserver": "link:../../../deepseek-harness/packages/host/webserver",
+    "@deepseek-ai/dsh-llm": "link:../../../deepseek-harness/packages/llm/llm",
+    "@deepseek-ai/dsh-session": "link:../../../deepseek-harness/packages/core/session",
+    "zod": "link:../../../deepseek-harness/node_modules/.pnpm/node_modules/zod"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "link:../../../deepseek-harness/vendor/cordis",
+    "@deepseek-ai/cordis-plugin-timer": "link:../../../deepseek-harness/vendor/timer",
+    "@deepseek-ai/dsh-client-runtime": "link:../../../deepseek-harness/packages/client/runtime",
+    "@deepseek-ai/dsh-client-ui-slots": "link:../../../deepseek-harness/packages/client/ui-slots",
+    "@deepseek-ai/dsh-client-ui-settings": "link:../../../deepseek-harness/packages/client/ui-settings",
+    "@types/node": "link:../../../deepseek-harness/node_modules/.pnpm/@types+node@26.1.2/node_modules/@types/node",
+    "@types/react": "link:../../../deepseek-harness/node_modules/.pnpm/node_modules/@types/react",
+    "@types/react-dom": "link:../../../deepseek-harness/node_modules/.pnpm/node_modules/@types/react-dom",
+    "react": "link:../../../deepseek-harness/node_modules/.pnpm/node_modules/react",
+    "typescript": "link:../../../deepseek-harness/node_modules/.pnpm/node_modules/typescript"
+  },
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "types": "./lib/types/client/index.d.ts",
+      "default": "./lib/client.js"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-slots"
+      ]
+    }
+  }
+}

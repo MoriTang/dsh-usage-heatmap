@@ -1,0 +1,62 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    dependencies:
+      '@deepseek-ai/cordis':
+        specifier: link:../../../deepseek-harness/vendor/cordis
+        version: link:../../../deepseek-harness/vendor/cordis
+      '@deepseek-ai/dsh-atomic-write':
+        specifier: link:../../../deepseek-harness/packages/util/atomic-write
+        version: link:../../../deepseek-harness/packages/util/atomic-write
+      '@deepseek-ai/dsh-credentials':
+        specifier: link:../../../deepseek-harness/packages/credentials/credentials
+        version: link:../../../deepseek-harness/packages/credentials/credentials
+      '@deepseek-ai/dsh-home-paths':
+        specifier: link:../../../deepseek-harness/packages/util/home-paths
+        version: link:../../../deepseek-harness/packages/util/home-paths
+      '@deepseek-ai/dsh-host-webserver':
+        specifier: link:../../../deepseek-harness/packages/host/webserver
+        version: link:../../../deepseek-harness/packages/host/webserver
+      '@deepseek-ai/dsh-llm':
+        specifier: link:../../../deepseek-harness/packages/llm/llm
+        version: link:../../../deepseek-harness/packages/llm/llm
+      '@deepseek-ai/dsh-session':
+        specifier: link:../../../deepseek-harness/packages/core/session
+        version: link:../../../deepseek-harness/packages/core/session
+      zod:
+        specifier: link:../../../deepseek-harness/node_modules/.pnpm/node_modules/zod
+        version: link:../../../deepseek-harness/node_modules/.pnpm/node_modules/zod
+    devDependencies:
+      '@deepseek-ai/cordis-plugin-timer':
+        specifier: link:../../../deepseek-harness/vendor/timer
+        version: link:../../../deepseek-harness/vendor/timer
+      '@deepseek-ai/dsh-client-runtime':
+        specifier: link:../../../deepseek-harness/packages/client/runtime
+        version: link:../../../deepseek-harness/packages/client/runtime
+      '@deepseek-ai/dsh-client-ui-settings':
+        specifier: link:../../../deepseek-harness/packages/client/ui-settings
+        version: link:../../../deepseek-harness/packages/client/ui-settings
+      '@deepseek-ai/dsh-client-ui-slots':
+        specifier: link:../../../deepseek-harness/packages/client/ui-slots
+        version: link:../../../deepseek-harness/packages/client/ui-slots
+      '@types/node':
+        specifier: link:../../../deepseek-harness/node_modules/.pnpm/@types+node@26.1.2/node_modules/@types/node
+        version: link:../../../deepseek-harness/node_modules/.pnpm/@types+node@26.1.2/node_modules/@types/node
+      '@types/react':
+        specifier: link:../../../deepseek-harness/node_modules/.pnpm/node_modules/@types/react
+        version: link:../../../deepseek-harness/node_modules/.pnpm/node_modules/@types/react
+      '@types/react-dom':
+        specifier: link:../../../deepseek-harness/node_modules/.pnpm/node_modules/@types/react-dom
+        version: link:../../../deepseek-harness/node_modules/.pnpm/node_modules/@types/react-dom
+      react:
+        specifier: link:../../../deepseek-harness/node_modules/.pnpm/node_modules/react
+        version: link:../../../deepseek-harness/node_modules/.pnpm/node_modules/react
+      typescript:
+        specifier: link:../../../deepseek-harness/node_modules/.pnpm/node_modules/typescript
+        version: link:../../../deepseek-harness/node_modules/.pnpm/node_modules/typescript
