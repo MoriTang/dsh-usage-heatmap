@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 
 /** One day cell in the history series. */
 export interface HistoryDay {
@@ -64,6 +65,11 @@ export function formatTokens(n: number): string {
   return `${v >= 100 ? Math.round(v) : Math.round(v * 10) / 10}M`
 }
 
+/** Full token count with thousands separators (for the hover tooltip). */
+function formatTokensFull(n: number): string {
+  return n.toLocaleString('en-US')
+}
+
 /** GitHub-style contribution color levels (0 → none … 4 → darkest). */
 function heatLevel(value: number, max: number): number {
   if (value <= 0) return 0
@@ -74,11 +80,6 @@ function heatLevel(value: number, max: number): number {
   return 4
 }
 
-/** 0 = Sunday. */
-function dayOfWeek(date: string): number {
-  return new Date(`${date}T00:00:00`).getDay()
-}
-
 const LEVEL_COLORS = [
   'var(--dsw-alias-fill-l3)',
   'var(--dsw-chart-1, #2f81f7)',
@@ -87,50 +88,161 @@ const LEVEL_COLORS = [
   'var(--dsw-chart-4, #f85149)',
 ]
 
-function Cell({ day, level }: { day: HistoryDay | null; level: number }) {
-  const title = day === null ? undefined : `${day.date} · ${formatTokens(day.tokens)} tokens`
-  return (
-    <span
-      title={title}
-      style={{
-        width: 11,
-        height: 11,
-        borderRadius: 2,
-        background: LEVEL_COLORS[level],
-        opacity: level === 0 ? 0.35 : 1,
-      }}
-    />
-  )
+const DAY_MS = 86_400_000
+
+/** Local date key (YYYY-MM-DD) for a Date. */
+function dateKey(d: Date): string {
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${d.getFullYear()}-${m}-${day}`
+}
+
+/** Start-of-day (local midnight) for a Date. */
+function startOfDay(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate())
+}
+
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+const WEEKDAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+/** One positioned cell: the day it represents (or null for a padding slot) and its token count. */
+interface GridCell {
+  date: string
+  tokens: number
+  /** True for days after today (future padding to complete the last week). */
+  future: boolean
 }
 
 /**
- * Heat-map grid: one cell per day, color intensity scales with that day's
- * token consumption relative to the peak day in the window.
+ * Build the GitHub-style calendar grid over the last `days` days.
+ *
+ * The grid is laid out as rows = weekday (Sun→Sat) and columns = weeks,
+ * oldest week leftmost. The window ends today and starts `days` days back;
+ * both ends are padded to full week boundaries so every row/column lines up.
+ * Days with no recorded usage still get a (level-0) cell — the calendar
+ * covers the whole year, not just active days.
+ */
+function buildGrid(days: HistoryDay[], windowDays: number): { cells: GridCell[]; monthLabels: Array<{ col: number; label: string }> } {
+  const byDate = new Map(days.map(d => [d.date, d.tokens]))
+  const today = startOfDay(new Date())
+
+  // Start: `windowDays` days before today, then snap back to the week's Sunday.
+  const start = startOfDay(new Date(today.getTime() - (windowDays - 1) * DAY_MS))
+  const startSunday = new Date(start.getTime() - start.getDay() * DAY_MS)
+
+  const cells: GridCell[] = []
+  const monthLabels: Array<{ col: number; label: string }> = []
+  const cursor = new Date(startSunday)
+  while (cursor.getTime() <= today.getTime()) {
+    const index = cells.length
+    // A month label marks the column containing that month's first day
+    // (GitHub places the label over the 1st's column).
+    if (cursor.getDate() === 1) {
+      monthLabels.push({ col: Math.floor(index / 7), label: MONTH_NAMES[cursor.getMonth()] })
+    }
+    const key = dateKey(cursor)
+    cells.push({ date: key, tokens: byDate.get(key) ?? 0, future: false })
+    cursor.setDate(cursor.getDate() + 1)
+  }
+
+  // Pad the trailing week to Saturday so the last column is complete.
+  while (cursor.getDay() !== 0) {
+    const key = dateKey(cursor)
+    cells.push({ date: key, tokens: 0, future: true })
+    cursor.setDate(cursor.getDate() + 1)
+  }
+
+  return { cells, monthLabels }
+}
+
+/**
+ * Heat-map grid, GitHub contributions style: one cell per day, rows are
+ * weekdays and columns are weeks, with a month label row on top. Color
+ * intensity scales with that day's token consumption relative to the peak day
+ * in the window; hovering a cell shows its date and exact token count.
  */
 export function TokenHeatmap({ days }: { days: HistoryDay[] }) {
   const max = useMemo(() => days.reduce((acc, d) => Math.max(acc, d.tokens), 0), [days])
-  // Build week columns for a GitHub-like calendar (oldest left, newest right).
-  const weeks = useMemo(() => {
-    const out: Array<Array<HistoryDay | null>> = []
-    // Pad to a full week boundary so the first column starts on the week's
-    // first day (weekday of the earliest date).
-    const first = days[0]
-    const pad = first === undefined ? 0 : dayOfWeek(first.date)
-    const padded: Array<HistoryDay | null> = [...Array<HistoryDay | null>(pad).fill(null), ...days]
-    for (let i = 0; i < padded.length; i += 7) out.push(padded.slice(i, i + 7))
-    return out
-  }, [days])
+  const { cells, monthLabels } = useMemo(() => buildGrid(days, 365), [days])
+  const colCount = Math.ceil(cells.length / 7)
 
   return (
-    <div style={{ display: 'flex', gap: 3, overflowX: 'auto', paddingBottom: 4 }}>
-      {weeks.map((week, wi) => (
-        <div key={wi} style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-          {week.map((day, di) => (
-            <Cell key={di} day={day} level={day === null ? 0 : heatLevel(day.tokens, max)} />
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {/* Month labels row: one label per column, placed at the column's x. */}
+      <div style={{ position: 'relative', height: 16, marginLeft: 34 }}>
+        {monthLabels.map(({ col, label }) => (
+          <span
+            key={col}
+            style={{
+              position: 'absolute',
+              left: col * 14,
+              fontSize: 11,
+              lineHeight: '16px',
+              color: 'var(--dsw-alias-label-tertiary)',
+            }}
+          >
+            {label}
+          </span>
+        ))}
+      </div>
+
+      <div style={{ display: 'flex', gap: 4 }}>
+        {/* Weekday labels column. */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 3, width: 30 }}>
+          {WEEKDAY_NAMES.map((name, row) => (
+            <span
+              key={name}
+              style={{
+                height: 11,
+                fontSize: 10,
+                lineHeight: '11px',
+                color: 'var(--dsw-alias-label-tertiary)',
+                // GitHub shows every other weekday label to reduce noise.
+                opacity: row % 2 === 1 ? 1 : 0.55,
+              }}
+            >
+              {name}
+            </span>
           ))}
         </div>
-      ))}
+
+        {/* Cells laid out in weekday rows × week columns. */}
+        <div style={{ display: 'flex', gap: 3, overflowX: 'auto', paddingBottom: 4 }}>
+          {Array.from({ length: colCount }, (_, col) => (
+            <div key={col} style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              {Array.from({ length: 7 }, (_, row) => {
+                const index = col * 7 + row
+                const cell = index < cells.length ? cells[index] : null
+                const level = cell === null ? 0 : heatLevel(cell.tokens, max)
+                return <Cell key={row} cell={cell} level={level} />
+              })}
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
+  )
+}
+
+function Cell({ cell, level }: { cell: GridCell | null; level: number }) {
+  if (cell === null || cell.future) {
+    return <span style={{ width: 11, height: 11, borderRadius: 2, background: 'transparent' }} />
+  }
+  const label = `${cell.date} · ${formatTokensFull(cell.tokens)} tokens`
+  return (
+    <Tooltip label={label} side="top">
+      <span
+        style={{
+          display: 'block',
+          width: 11,
+          height: 11,
+          borderRadius: 2,
+          background: LEVEL_COLORS[level],
+          opacity: level === 0 ? 0.35 : 1,
+          cursor: 'pointer',
+        }}
+      />
+    </Tooltip>
   )
 }
 

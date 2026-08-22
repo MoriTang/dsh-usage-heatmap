@@ -37,7 +37,7 @@ export const Config: z.ZodType<Config> = z.object({
   apiKeyEnv: z.string().default('DEEPSEEK_API_KEY'),
   baseURL: z.string().default('https://api.deepseek.com'),
   refreshMs: z.number().int().positive().default(60_000),
-  historyDays: z.number().int().positive().default(90),
+  historyDays: z.number().int().positive().default(365),
 })
 
 export const name = 'usage-heatmap'
