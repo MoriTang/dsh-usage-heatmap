@@ -23,7 +23,7 @@ interface BalanceResponse {
 }
 
 export interface Config {
-  /** Per-million-token prices in `currency` units. */
+  /** Per-million-token prices in `currency` units (peak/off-peak × hit/miss × in/out). */
   pricing: Pricing
   /** Currency the prices are expressed in (display only). */
   currency: string
@@ -39,10 +39,12 @@ export interface Config {
 
 export const Config: z.ZodType<Config> = z.object({
   pricing: z.object({
-    inputPerM: z.number().nonnegative(),
-    outputPerM: z.number().nonnegative(),
-    cacheReadPerM: z.number().nonnegative(),
-    cacheWritePerM: z.number().nonnegative(),
+    inputMissPeakPerM: z.number().nonnegative(),
+    inputMissOffPerM: z.number().nonnegative(),
+    inputHitPeakPerM: z.number().nonnegative(),
+    inputHitOffPerM: z.number().nonnegative(),
+    outputPeakPerM: z.number().nonnegative(),
+    outputOffPerM: z.number().nonnegative(),
   }),
   currency: z.string().default('¥'),
   apiKeyEnv: z.string().default('DEEPSEEK_API_KEY'),
@@ -52,7 +54,7 @@ export const Config: z.ZodType<Config> = z.object({
 })
 
 export const name = 'usage-heatmap'
-export const inject = ['webServer', 'timer']
+export const inject = ['webServer', 'timer', 'credentials']
 
 function json(res: ServerResponse, value: unknown): void {
   res.setHeader('content-type', 'application/json')

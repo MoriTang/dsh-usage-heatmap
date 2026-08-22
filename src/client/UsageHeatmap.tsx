@@ -157,7 +157,6 @@ export function SummaryCards({ payload }: { payload: HistoryPayload }) {
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
-      <SummaryCard label="Topped-up balance" value={cny === undefined ? '—' : `${symbol}${cny.topped_up_balance}`} />
       <SummaryCard label="Total balance" value={cny === undefined ? '—' : `${symbol}${cny.total_balance}`} />
       <SummaryCard label="Total cost (all time)" value={formatMoney(payload.totals.cost, payload.currency)} />
       <SummaryCard label="Tokens (all time)" value={formatTokens(payload.totals.tokens)} />
