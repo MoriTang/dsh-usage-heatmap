@@ -179,6 +179,15 @@ export function TokenHeatmap({ days }: { days: HistoryDay[] }) {
   // 0-based weekday (0=Sun) → 1-based grid row (skip the month label row).
   const weekdayRow = (weekday: number): number => weekday + 2
 
+  // Each month label spans from its own week column to the column just before
+  // the next month's label (or the last column), so the full label always has
+  // room and never gets clipped by a single narrow column.
+  const monthSpans = monthLabels.map((m, i) => {
+    const start = m.col
+    const end = i + 1 < monthLabels.length ? monthLabels[i + 1].col - 1 : colCount - 1
+    return { ...m, start, span: Math.max(1, end - start + 1) }
+  })
+
   return (
     <div
       style={{
@@ -190,18 +199,20 @@ export function TokenHeatmap({ days }: { days: HistoryDay[] }) {
         alignItems: 'stretch',
       }}
     >
-      {/* Month labels (row 1): each sits in the column containing the month's 1st. */}
-      {monthLabels.map(({ col, label }) => (
+      {/* Month labels (row 1): each spans to the next month's column so the
+          full label fits without clipping. */}
+      {monthSpans.map(({ col, label, span }) => (
         <span
           key={label}
           style={{
-            gridColumn: `${weekCol(col)} / span 1`,
+            gridColumn: `${weekCol(col)} / span ${span}`,
             gridRow: 1,
             fontSize: 9,
             lineHeight: '12px',
             color: 'var(--dsw-alias-label-tertiary)',
             whiteSpace: 'nowrap',
             overflow: 'hidden',
+            textOverflow: 'clip',
           }}
         >
           {label}
@@ -248,24 +259,32 @@ function Cell({ cell, level }: { cell: GridCell | null; level: number }) {
   // Future cells (padding to complete the last week) still draw a visible
   // level-0 square so the calendar rectangle stays complete.
   if (cell.future) {
-    return <span style={{ display: 'block', width: '100%', aspectRatio: '1', borderRadius: 2, background: LEVEL_COLORS[0], opacity: 0.35 }} />
+    return <span style={cellBaseStyle(LEVEL_COLORS[0])} />
   }
   const label = `${cell.date} · ${formatTokensFull(cell.tokens)} tokens`
   return (
     <Tooltip label={label} side="top">
-      <span
-        style={{
-          display: 'block',
-          width: '100%',
-          aspectRatio: '1',
-          borderRadius: 2,
-          background: LEVEL_COLORS[level],
-          opacity: level === 0 ? 0.35 : 1,
-          cursor: 'pointer',
-        }}
-      />
+      <span style={cellBaseStyle(LEVEL_COLORS[level])} />
     </Tooltip>
   )
+}
+
+/**
+ * One day cell's visual: a bordered square. Level 0 keeps the light fill at
+ * full opacity so empty days are still clearly visible, while level 1+ get a
+ * solid color. The shared border makes every cell read as a grid square.
+ */
+function cellBaseStyle(background: string): React.CSSProperties {
+  return {
+    display: 'block',
+    width: '100%',
+    aspectRatio: '1',
+    borderRadius: 2,
+    background,
+    border: '1px solid var(--dsw-alias-border-l1)',
+    boxSizing: 'border-box',
+    cursor: 'pointer',
+  }
 }
 
 /** Summary card: total balance and whole-history token total. */
