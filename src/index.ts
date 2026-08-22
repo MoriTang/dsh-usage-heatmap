@@ -41,7 +41,7 @@ export const Config: z.ZodType<Config> = z.object({
 })
 
 export const name = 'usage-heatmap'
-export const inject = ['webServer', 'timer', 'credentials']
+export const inject = ['webServer', 'timer', 'credentials', 'sessionPersistence']
 
 function json(res: ServerResponse, value: unknown): void {
   res.setHeader('content-type', 'application/json')
@@ -67,6 +67,35 @@ export function apply(ctx: Context, config: Config): void {
   // debounced atomic rewrite. Committed events only — no replay double-count.
   const store = new DailyUsageStore()
   void store.load()
+
+  // Backfill persisted session logs so usage from before this plugin was
+  // installed is counted (the live `session/event` firehose only sees events
+  // committed after mount). Best-effort: a missing persistence service or a
+  // failed read keeps the live counter running on top of the loaded file.
+  void (async () => {
+    const persistence = ctx.get('sessionPersistence')
+    if (persistence === undefined) return
+    try {
+      const sessions = await persistence.list()
+      // Logs are authoritative: recompute from scratch, discarding the file.
+      store.beginBackfill()
+      for (const meta of sessions) {
+        try {
+          // Skip seed events (fork/resume lineage): their usage belongs to the
+          // ancestor session that first produced them, not this child.
+          const fromSeq = meta.seedLength ?? 0
+          const { events } = await persistence.readFrom(meta.id, fromSeq)
+          store.backfill(meta.id, events)
+        } catch {
+          // Skip a session that fails to read; the live counter still runs.
+        }
+      }
+      await store.dispose() // flush the backfilled totals to disk
+    } catch {
+      // Listing failure is non-fatal: keep the loaded file + live counter.
+    }
+  })()
+
   ctx.on('session/event', (session, event) => {
     store.consume(session, event)
   })
