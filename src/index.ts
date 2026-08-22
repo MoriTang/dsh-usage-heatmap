@@ -7,7 +7,7 @@ import type {} from '@deepseek-ai/dsh-host-webserver'
 import type {} from '@deepseek-ai/cordis-plugin-timer'
 import { credentialRef, type CredentialRef } from '@deepseek-ai/dsh-credentials'
 import { z } from 'zod'
-import { DailyUsageStore, type Pricing } from './daily-usage.ts'
+import { DailyUsageStore } from './daily-usage.ts'
 
 /** One balance line from the DeepSeek /user/balance response. */
 interface BalanceInfo {
@@ -23,10 +23,6 @@ interface BalanceResponse {
 }
 
 export interface Config {
-  /** Per-million-token prices in `currency` units (peak/off-peak × hit/miss × in/out). */
-  pricing: Pricing
-  /** Currency the prices are expressed in (display only). */
-  currency: string
   /** Credential reference (environment-variable name) for the API key. */
   apiKeyEnv: string
   /** Endpoint base; `/user/balance` is appended. */
@@ -38,15 +34,6 @@ export interface Config {
 }
 
 export const Config: z.ZodType<Config> = z.object({
-  pricing: z.object({
-    inputMissPeakPerM: z.number().nonnegative(),
-    inputMissOffPerM: z.number().nonnegative(),
-    inputHitPeakPerM: z.number().nonnegative(),
-    inputHitOffPerM: z.number().nonnegative(),
-    outputPeakPerM: z.number().nonnegative(),
-    outputOffPerM: z.number().nonnegative(),
-  }),
-  currency: z.string().default('¥'),
   apiKeyEnv: z.string().default('DEEPSEEK_API_KEY'),
   baseURL: z.string().default('https://api.deepseek.com'),
   refreshMs: z.number().int().positive().default(60_000),
@@ -62,12 +49,12 @@ function json(res: ServerResponse, value: unknown): void {
 }
 
 /**
- * Host half: accumulates per-day token/cost history persisted under
+ * Host half: accumulates per-day token totals persisted under
  * `$DSH_HOME/usage-heatmap/`, queries the DeepSeek account balance, and
  * serves one exact route the browser half reads:
  *
- * - `/usage-heatmap/history` — the recent per-day token/cost series plus
- *   whole-history totals and the cached account balance (heat-map + summary).
+ * - `/usage-heatmap/history` — the recent per-day token series plus the
+ *   whole-history token total and the cached account balance.
  *
  * Balance and history are external/global account facts, not session-log
  * folds, so they cannot ride the projection wire (pure event folding) and
@@ -78,7 +65,7 @@ export function apply(ctx: Context, config: Config): void {
 
   // Daily history: fold usage-bearing events per local day, persisted with a
   // debounced atomic rewrite. Committed events only — no replay double-count.
-  const store = new DailyUsageStore(config.pricing)
+  const store = new DailyUsageStore()
   void store.load()
   ctx.on('session/event', (session, event) => {
     store.consume(session, event)
@@ -133,7 +120,6 @@ export function apply(ctx: Context, config: Config): void {
     json(res, {
       days,
       totals,
-      currency: config.currency,
       balance: balance ?? null,
       checkedAt,
       lastError: lastError ?? null,

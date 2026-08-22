@@ -9,9 +9,9 @@ import { UsageHeatmapSection } from './UsageHeatmapSection.tsx'
 export const inject = ['slots']
 
 /**
- * Browser half: registers a settings section ("Usage & Cost") beside General
+ * Browser half: registers a settings section ("Usage") beside General
  * and Models. The page renders a GitHub-style daily token-consumption heat
- * map plus balance/cost summary cards, fed by the host's
+ * map plus balance/token summary cards, fed by the host's
  * `/usage-heatmap/history` route.
  */
 export function apply(ctx: ClientContext): void {
@@ -19,7 +19,7 @@ export function apply(ctx: ClientContext): void {
     name: 'settings.section',
     id: 'usage-heatmap',
     order: 20,
-    label: 'Usage & Cost',
+    label: 'Usage',
   }, UsageHeatmapSection))
 }
 

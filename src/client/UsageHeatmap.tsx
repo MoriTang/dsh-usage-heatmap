@@ -4,12 +4,10 @@ import { useEffect, useMemo, useState } from 'react'
 export interface HistoryDay {
   date: string
   tokens: number
-  cost: number
 }
 
 export interface HistoryTotals {
   tokens: number
-  cost: number
 }
 
 export interface BalanceInfo {
@@ -22,7 +20,6 @@ export interface BalanceInfo {
 export interface HistoryPayload {
   days: HistoryDay[]
   totals: HistoryTotals
-  currency: string
   balance: {
     is_available: boolean
     balance_infos: BalanceInfo[]
@@ -54,16 +51,6 @@ export function useHistory(intervalMs: number): HistoryPayload | null {
     }
   }, [intervalMs])
   return payload
-}
-
-/** Compact money: 0.001234 → ¥0.0012 (4 sig figs, no trailing zeros). */
-export function formatMoney(cost: number, currency: string): string {
-  if (cost === 0) return `${currency}0`
-  if (cost >= 100) return `${currency}${cost.toFixed(2)}`
-  if (cost >= 1) return `${currency}${cost.toFixed(3)}`
-  const magnitude = Math.floor(Math.log10(cost))
-  const digits = 3 - magnitude
-  return `${currency}${cost.toFixed(Math.max(0, digits))}`
 }
 
 /** Compact token count: 517 / 12.2K / 1.2M. */
@@ -101,9 +88,7 @@ const LEVEL_COLORS = [
 ]
 
 function Cell({ day, level }: { day: HistoryDay | null; level: number }) {
-  const title = day === null
-    ? undefined
-    : `${day.date} · ${formatTokens(day.tokens)} tokens · ${formatMoney(day.cost, '¥')}`
+  const title = day === null ? undefined : `${day.date} · ${formatTokens(day.tokens)} tokens`
   return (
     <span
       title={title}
@@ -149,7 +134,7 @@ export function TokenHeatmap({ days }: { days: HistoryDay[] }) {
   )
 }
 
-/** Summary card: topped-up balance, total cost, and window token/cost totals. */
+/** Summary card: total balance and whole-history token total. */
 export function SummaryCards({ payload }: { payload: HistoryPayload }) {
   const cny = payload.balance?.balance_infos.find(info => info.currency === 'CNY')
     ?? payload.balance?.balance_infos[0]
@@ -158,7 +143,6 @@ export function SummaryCards({ payload }: { payload: HistoryPayload }) {
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
       <SummaryCard label="Total balance" value={cny === undefined ? '—' : `${symbol}${cny.total_balance}`} />
-      <SummaryCard label="Total cost (all time)" value={formatMoney(payload.totals.cost, payload.currency)} />
       <SummaryCard label="Tokens (all time)" value={formatTokens(payload.totals.tokens)} />
     </div>
   )

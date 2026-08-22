@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Out-of-tree DeepSeek Harness plugin: a settings page with a GitHub-style daily token-consumption heat map plus balance and cost summary.",
+  "description": "Out-of-tree DeepSeek Harness plugin: a settings page with a GitHub-style daily token-consumption heat map plus balance summary.",
   "dependencies": {
     "@deepseek-ai/cordis": "link:../../../deepseek-harness/vendor/cordis",
     "@deepseek-ai/dsh-atomic-write": "link:../../../deepseek-harness/packages/util/atomic-write",
