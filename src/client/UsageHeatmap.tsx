@@ -97,12 +97,16 @@ function levelRangeLabel(level: number): string {
   }
 }
 
+/**
+ * One hue (GitHub-green), four increasing opacities: darker = more tokens.
+ * Level 0 stays a neutral fill for empty days; levels 1..4 are the green ramp.
+ */
 const LEVEL_COLORS = [
   'var(--dsw-alias-fill-l3)',
-  'var(--dsw-chart-1, #2f81f7)',
-  'var(--dsw-chart-2, #a371f7)',
-  'var(--dsw-chart-3, #d29922)',
-  'var(--dsw-chart-4, #f85149)',
+  '#9be9a8',
+  '#40c463',
+  '#30a14e',
+  '#216e39',
 ]
 
 const DAY_MS = 86_400_000
