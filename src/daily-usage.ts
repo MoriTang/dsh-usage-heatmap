@@ -22,6 +22,12 @@ function usageTokenTotal(usage: TokenUsage): number {
     + usage.outputTokens
 }
 
+/** The model a `request/header` snapshot carries, or undefined. */
+function modelOf(event: SessionEvent): string | undefined {
+  if (event.type !== 'request/header') return undefined
+  return event.data.header.config.model
+}
+
 /** Local-calendar day key (YYYY-MM-DD) for an event timestamp. */
 function dayKey(time: number): string {
   const d = new Date(time)
@@ -30,26 +36,34 @@ function dayKey(time: number): string {
   return `${d.getFullYear()}-${m}-${day}`
 }
 
-/** Persisted shape: version + per-day token totals. */
+/** One day's totals: grand total plus per-model breakdown. */
+export interface DayTotals {
+  tokens: number
+  byModel: Record<string, number>
+}
+
+const zeroDay = (): DayTotals => ({ tokens: 0, byModel: {} })
+
+/** Persisted shape: version + per-day totals. */
 interface Persisted {
-  version: 4
-  days: Record<string, number>
+  version: 5
+  days: Record<string, DayTotals>
 }
 
 /**
  * Per-day token history, persisted under `$DSH_HOME/usage-heatmap/`.
  *
  * Subscribes to `session/event` and folds every usage-bearing event into the
- * local calendar day it belongs to. On startup it also backfills all
- * PERSISTED session logs, so usage from before the plugin was installed is
- * counted instead of only the events observed after mount. Dedup is keyed by
- * (sessionId, turn, step): a step whose usage arrives both as a stream chunk
- * and as the final message counts once, and a live event never double-counts
- * against the backfilled log of the same session.
+ * local calendar day it belongs to, attributing each sample to the model named
+ * by the most recent `request/header` snapshot. On startup it also backfills
+ * all PERSISTED session logs, so usage from before the plugin was installed is
+ * counted. Dedup is keyed by (sessionId, turn, step); the live firehose never
+ * double-counts against the backfilled log of the same session.
  */
 export class DailyUsageStore {
-  private readonly days = new Map<string, number>()
+  private readonly days = new Map<string, DayTotals>()
   private readonly lastStep = new Map<SessionId, { turn: number; step: number }>()
+  private readonly currentModel = new Map<SessionId, string>()
   private flushTimer: ReturnType<typeof setTimeout> | undefined
   private readonly filename = dshHomePath('usage-heatmap', 'daily-usage.json')
 
@@ -59,11 +73,10 @@ export class DailyUsageStore {
       const { readFile } = await import('node:fs/promises')
       const raw = await readFile(this.filename, 'utf8')
       const parsed = JSON.parse(raw) as Partial<Persisted>
-      // Only accept the v4 format (plain per-day token totals); older
-      // bucket/total formats are dropped rather than served as wrong data.
-      if (parsed.version !== 4 || typeof parsed.days !== 'object' || parsed.days === null) return
+      if (parsed.version !== 5 || typeof parsed.days !== 'object' || parsed.days === null) return
       for (const [day, value] of Object.entries(parsed.days)) {
-        if (typeof value === 'number' && Number.isFinite(value)) this.days.set(day, value)
+        if (!isDayTotals(value)) continue
+        this.days.set(day, { tokens: value.tokens, byModel: { ...value.byModel } })
       }
     } catch {
       // Missing or corrupt history: keep an empty in-memory state rather than
@@ -71,22 +84,14 @@ export class DailyUsageStore {
     }
   }
 
-  /**
-   * Clear the loaded values before rebuilding from persisted logs. The logs
-   * are the authoritative source: days are recomputed from scratch and the
-   * file's loaded values (which miss events committed before mount) are
-   * discarded. Called only when a session persistence service is available.
-   */
+  /** Clear the loaded values before rebuilding from persisted logs. */
   beginBackfill(): void {
     this.days.clear()
+    this.currentModel.clear()
+    this.lastStep.clear()
   }
 
-  /**
-   * Backfill from one persisted session's event log. Days aggregate across
-   * sessions; the (sessionId, turn, step) dedup key is shared with
-   * {@link consume}, so a session that later resumes cannot double-count its
-   * replayed seed against the live events.
-   */
+  /** Backfill from one persisted session's event log. */
   backfill(sessionId: SessionId, events: readonly SessionEvent[]): void {
     for (const event of events) {
       this.fold(sessionId, event)
@@ -94,12 +99,19 @@ export class DailyUsageStore {
     this.scheduleFlush()
   }
 
-  /** Fold one live session event into the store. Returns true when the day changed. */
+  /** Fold one live session event into the store. */
   consume(session: Session, event: SessionEvent): boolean {
     return this.fold(session.id, event)
   }
 
   private fold(sessionId: SessionId, event: SessionEvent): boolean {
+    // Track the active model from request/header snapshots (they precede the
+    // usage events they describe, in seq order).
+    const headerModel = modelOf(event)
+    if (headerModel !== undefined) {
+      this.currentModel.set(sessionId, headerModel)
+    }
+
     const sample = usageOf(event)
     if (sample === undefined) return false
     const prev = this.lastStep.get(sessionId)
@@ -107,20 +119,29 @@ export class DailyUsageStore {
     this.lastStep.set(sessionId, { turn: sample.turn, step: sample.step })
 
     const day = dayKey(event.time)
-    this.days.set(day, (this.days.get(day) ?? 0) + usageTokenTotal(sample.usage))
+    const totals = this.days.get(day) ?? zeroDay()
+    const total = usageTokenTotal(sample.usage)
+    totals.tokens += total
+    const model = this.currentModel.get(sessionId) ?? 'unknown'
+    totals.byModel[model] = (totals.byModel[model] ?? 0) + total
+    this.days.set(day, totals)
     this.scheduleFlush()
     return true
   }
 
   /** Ordered day list (oldest first) plus the whole-history total. */
   snapshot(limitDays: number): {
-    days: Array<{ date: string; tokens: number }>
+    days: Array<{ date: string; tokens: number; byModel: Record<string, number> }>
     totals: { tokens: number }
   } {
     const entries = [...this.days.entries()].sort(([a], [b]) => a.localeCompare(b))
-    const days = entries.slice(-limitDays).map(([date, tokens]) => ({ date, tokens }))
+    const days = entries.slice(-limitDays).map(([date, value]) => ({
+      date,
+      tokens: value.tokens,
+      byModel: value.byModel,
+    }))
     let tokens = 0
-    for (const [, value] of entries) tokens += value
+    for (const [, value] of entries) tokens += value.tokens
     return { days, totals: { tokens } }
   }
 
@@ -133,10 +154,10 @@ export class DailyUsageStore {
   }
 
   private async flush(): Promise<void> {
-    const days: Record<string, number> = {}
+    const days: Record<string, DayTotals> = {}
     for (const [day, value] of this.days) days[day] = value
     try {
-      await writeFileAtomic(this.filename, JSON.stringify({ version: 4, days }, null, 2), { mode: 0o600, dirMode: 0o700 })
+      await writeFileAtomic(this.filename, JSON.stringify({ version: 5, days }, null, 2), { mode: 0o600, dirMode: 0o700 })
     } catch {
       // Persistence failure must never crash the session pipeline; the next
       // consume schedules another flush.
@@ -151,4 +172,15 @@ export class DailyUsageStore {
     }
     await this.flush()
   }
+}
+
+function isDayTotals(value: unknown): value is DayTotals {
+  if (typeof value !== 'object' || value === null) return false
+  const v = value as Record<string, unknown>
+  if (typeof v.tokens !== 'number' || !Number.isFinite(v.tokens)) return false
+  if (typeof v.byModel !== 'object' || v.byModel === null) return false
+  for (const n of Object.values(v.byModel)) {
+    if (typeof n !== 'number' || !Number.isFinite(n)) return false
+  }
+  return true
 }

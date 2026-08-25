@@ -5,6 +5,7 @@ import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 export interface HistoryDay {
   date: string
   tokens: number
+  byModel: Record<string, number>
 }
 
 export interface HistoryTotals {
@@ -130,6 +131,7 @@ const WEEKDAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 interface GridCell {
   date: string
   tokens: number
+  byModel: Record<string, number>
   /** True for days after today (future padding to complete the last week). */
   future: boolean
 }
@@ -144,7 +146,7 @@ interface GridCell {
  * covers the whole year, not just active days.
  */
 function buildGrid(days: HistoryDay[], windowDays: number): { cells: GridCell[]; monthLabels: Array<{ col: number; label: string }> } {
-  const byDate = new Map(days.map(d => [d.date, d.tokens]))
+  const byDate = new Map(days.map(d => [d.date, d]))
   const today = startOfDay(new Date())
 
   // Start: `windowDays` days before today, then snap back to the week's Sunday.
@@ -162,14 +164,15 @@ function buildGrid(days: HistoryDay[], windowDays: number): { cells: GridCell[];
       monthLabels.push({ col: Math.floor(index / 7), label: MONTH_NAMES[cursor.getMonth()] })
     }
     const key = dateKey(cursor)
-    cells.push({ date: key, tokens: byDate.get(key) ?? 0, future: false })
+    const day = byDate.get(key)
+    cells.push({ date: key, tokens: day?.tokens ?? 0, byModel: day?.byModel ?? {}, future: false })
     cursor.setDate(cursor.getDate() + 1)
   }
 
   // Pad the trailing week to Saturday so the last column is complete.
   while (cursor.getDay() !== 0) {
     const key = dateKey(cursor)
-    cells.push({ date: key, tokens: 0, future: true })
+    cells.push({ date: key, tokens: 0, byModel: {}, future: true })
     cursor.setDate(cursor.getDate() + 1)
   }
 
@@ -309,12 +312,22 @@ function Cell({ cell, level }: { cell: GridCell | null; level: number }) {
   if (cell.future) {
     return <span style={cellBaseStyle(LEVEL_COLORS[0])} />
   }
-  const label = `${cell.date} · ${formatTokensFull(cell.tokens)} tokens`
+  const label = cellTooltipLabel(cell)
   return (
     <Tooltip label={label} side="top">
       <span style={cellBaseStyle(LEVEL_COLORS[level])} />
     </Tooltip>
   )
+}
+
+/** Multi-line tooltip: date, total tokens, and a per-model breakdown. */
+function cellTooltipLabel(cell: GridCell): string {
+  const lines = [`${cell.date} · ${formatTokensFull(cell.tokens)} tokens`]
+  const models = Object.entries(cell.byModel).sort((a, b) => b[1] - a[1])
+  for (const [model, tokens] of models) {
+    lines.push(`${model}: ${formatTokensFull(tokens)} tokens`)
+  }
+  return lines.join('\n')
 }
 
 /**
