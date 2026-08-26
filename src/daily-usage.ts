@@ -16,7 +16,7 @@ function usageOf(event: SessionEvent): { turn: number; step: number; usage: Toke
 
 /** Total tokens in one usage sample (input + output + cache traffic). */
 function usageTokenTotal(usage: TokenUsage): number {
-  return usage.inputTokens
+  return (usage.inputTokens ?? 0)
     + (usage.cacheReadTokens ?? 0)
     + (usage.cacheWriteTokens ?? 0)
     + (usage.outputTokens ?? 0)
@@ -55,7 +55,7 @@ interface LastContribution {
 
 /** Persisted shape: version + per-day totals. */
 interface Persisted {
-  version: 6
+  version: 5 | 6
   days: Record<string, DayTotals>
 }
 
@@ -70,13 +70,23 @@ interface Persisted {
  * double-counting (the token-meter invariant). On startup it also backfills
  * all PERSISTED session logs through {@link backfill}, so usage from before
  * the plugin was installed is counted.
+ *
+ * An instance created with `persist: false` is a memory-only accumulator: it
+ * never writes the history file, so a startup backfill can build a candidate
+ * in isolation without racing the live store's flush.
  */
 export class DailyUsageStore {
   private readonly days = new Map<string, DayTotals>()
   private readonly lastContribution = new Map<SessionId, LastContribution>()
   private readonly currentModel = new Map<SessionId, string>()
+  private readonly backfillMaxSeq = new Map<SessionId, number>()
   private flushTimer: ReturnType<typeof setTimeout> | undefined
   private readonly filename = dshHomePath('usage-heatmap', 'daily-usage.json')
+  private readonly persist: boolean
+
+  constructor(options: { persist?: boolean } = {}) {
+    this.persist = options.persist ?? true
+  }
 
   /**
    * Adopt another store's full state, replacing this instance's. Used at
@@ -92,7 +102,19 @@ export class DailyUsageStore {
     for (const [id, c] of other.lastContribution) this.lastContribution.set(id, { ...c })
     this.currentModel.clear()
     for (const [id, model] of other.currentModel) this.currentModel.set(id, model)
+    this.backfillMaxSeq.clear()
+    for (const [id, seq] of other.backfillMaxSeq) this.backfillMaxSeq.set(id, seq)
     this.scheduleFlush()
+  }
+
+  /**
+   * Highest persisted event seq already backfilled per session. Live events
+   * buffered during startup whose seq is at or below this watermark were
+   * already folded into the accumulator and must NOT replay (they are not
+   * double-counted).
+   */
+  maxBackfilledSeq(sessionId: SessionId): number {
+    return this.backfillMaxSeq.get(sessionId) ?? -1
   }
 
   /** Load the persisted history (best-effort; a missing/corrupt file starts empty). */
@@ -101,7 +123,10 @@ export class DailyUsageStore {
       const { readFile } = await import('node:fs/promises')
       const raw = await readFile(this.filename, 'utf8')
       const parsed = JSON.parse(raw) as Partial<Persisted>
-      if (parsed.version !== 6 || typeof parsed.days !== 'object' || parsed.days === null) return
+      // v5 and v6 share the same payload shape (per-day DayTotals); v6 only
+      // fixed the usage-replacement fold semantics, which replay rebuilds.
+      // Accept both so a failed backfill still serves the last good file.
+      if ((parsed.version !== 5 && parsed.version !== 6) || typeof parsed.days !== 'object' || parsed.days === null) return
       for (const [day, value] of Object.entries(parsed.days)) {
         if (!isDayTotals(value)) continue
         this.days.set(day, { tokens: value.tokens, byModel: { ...value.byModel } })
@@ -117,13 +142,17 @@ export class DailyUsageStore {
     this.days.clear()
     this.currentModel.clear()
     this.lastContribution.clear()
+    this.backfillMaxSeq.clear()
   }
 
   /** Backfill from one persisted session's event log. */
   backfill(sessionId: SessionId, events: readonly SessionEvent[]): void {
+    let maxSeq = -1
     for (const event of events) {
+      if (event.seq > maxSeq) maxSeq = event.seq
       this.fold(sessionId, event)
     }
+    if (maxSeq >= 0) this.backfillMaxSeq.set(sessionId, maxSeq)
     this.scheduleFlush()
   }
 
@@ -187,7 +216,8 @@ export class DailyUsageStore {
     const days = entries.slice(-limitDays).map(([date, value]) => ({
       date,
       tokens: value.tokens,
-      byModel: value.byModel,
+      // Detached copy: consumers may render or persist this view later.
+      byModel: { ...value.byModel },
     }))
     let tokens = 0
     for (const [, value] of entries) tokens += value.tokens
@@ -195,6 +225,7 @@ export class DailyUsageStore {
   }
 
   private scheduleFlush(): void {
+    if (!this.persist) return
     if (this.flushTimer !== undefined) return
     this.flushTimer = setTimeout(() => {
       this.flushTimer = undefined
@@ -202,24 +233,43 @@ export class DailyUsageStore {
     }, 500)
   }
 
-  private async flush(): Promise<void> {
-    const days: Record<string, DayTotals> = {}
-    for (const [day, value] of this.days) days[day] = value
-    try {
-      await writeFileAtomic(this.filename, JSON.stringify({ version: 6, days }, null, 2), { mode: 0o600, dirMode: 0o700 })
-    } catch {
-      // Persistence failure must never crash the session pipeline; the next
-      // consume schedules another flush.
+  /**
+   * Serialized write chain: at most one writeFileAtomic runs at a time, and
+   * every queued write snapshots the LATEST memory state when it starts. This
+   * prevents an older snapshot from renaming over a newer one when flushes
+   * overlap.
+   */
+  private writeChain: Promise<void> = Promise.resolve()
+  private dirty = false
+
+  private flush(): Promise<void> {
+    this.dirty = true
+    const run = async (): Promise<void> => {
+      if (!this.dirty) return
+      this.dirty = false
+      const days: Record<string, DayTotals> = {}
+      for (const [day, value] of this.days) days[day] = value
+      try {
+        await writeFileAtomic(this.filename, JSON.stringify({ version: 6, days }, null, 2), { mode: 0o600, dirMode: 0o700 })
+      } catch {
+        // Persistence failure must never crash the session pipeline; the next
+        // consume schedules another flush.
+      }
+      if (this.dirty) await run()
     }
+    this.writeChain = this.writeChain.then(run, run)
+    return this.writeChain
   }
 
   /** Flush any pending write (used before the fiber unloads). */
   async dispose(): Promise<void> {
+    if (!this.persist) return
     if (this.flushTimer !== undefined) {
       clearTimeout(this.flushTimer)
       this.flushTimer = undefined
     }
-    await this.flush()
+    this.dirty = true
+    await this.writeChain
   }
 }
 

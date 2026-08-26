@@ -71,15 +71,21 @@ export function apply(ctx: Context, config: Config): void {
   // Startup sequencing guards against three-way races between the persisted
   // file load, the session-log backfill, and live events:
   //   1. live events are buffered (not folded) until initialization settles;
-  //   2. backfill runs in a SEPARATE accumulator, never touching `store`;
-  //   3. on success `store.adopt(acc)` swaps the rebuilt history in atomically,
-  //      then the buffered live events replay on top.
-  // A backfill failure keeps the file-loaded state and still replays buffered
-  // events, so a bad read never clobbers good data.
+  //   2. backfill runs in a SEPARATE memory-only accumulator (`persist: false`
+  //      never writes the file), so a partial rebuild cannot clobber disk;
+  //   3. on success `store.adopt(acc)` swaps the rebuilt history in atomically;
+  //   4. buffered live events replay only if their seq is ABOVE the backfill
+  //      watermark (events already folded by backfill are skipped — no
+  //      double-count). A backfill failure keeps the file-loaded state.
   const pendingLive: Array<{ session: Session; event: SessionEvent }> = []
   let ready = false
+  let disposed = false
   const replayPending = (): void => {
-    for (const { session, event } of pendingLive) store.consume(session, event)
+    for (const { session, event } of pendingLive) {
+      // Skip events the backfill already consumed (seq at or below watermark).
+      if (event.seq !== undefined && event.seq <= store.maxBackfilledSeq(session.id)) continue
+      store.consume(session, event)
+    }
     pendingLive.length = 0
     ready = true
   }
@@ -91,21 +97,26 @@ export function apply(ctx: Context, config: Config): void {
     }
     store.consume(session, event)
   })
-  ctx.effect(() => () => { void store.dispose() }, 'usage-heatmap: daily usage flush')
+  ctx.effect(() => () => {
+    disposed = true
+    return store.dispose()
+  }, 'usage-heatmap: daily usage flush')
 
   void (async () => {
     await store.load()
+    if (disposed) return
     const persistence = ctx.get('sessionPersistence')
     if (persistence !== undefined) {
       try {
         const sessions = await persistence.list()
-        // Rebuild history in an isolated accumulator. If ANY session read
-        // fails, abort the whole backfill and keep the file-loaded state —
-        // never persist a partially rebuilt history as if it were complete.
-        const acc = new DailyUsageStore()
+        // Rebuild history in an isolated memory-only accumulator. If ANY
+        // session read fails, abort the whole backfill and keep the
+        // file-loaded state — never persist a partial history.
+        const acc = new DailyUsageStore({ persist: false })
         acc.beginBackfill()
         let failed = false
         for (const meta of sessions) {
+          if (disposed) return
           try {
             // Skip seed events (fork/resume lineage): their usage belongs to
             // the ancestor session that first produced them, not this child.
@@ -117,11 +128,12 @@ export function apply(ctx: Context, config: Config): void {
             break
           }
         }
-        if (!failed) store.adopt(acc)
+        if (!disposed && !failed) store.adopt(acc)
       } catch {
         // Listing failure is non-fatal: keep the loaded file + live counter.
       }
     }
+    if (disposed) return
     await store.dispose() // persist the settled initial state
     replayPending()
   })()
