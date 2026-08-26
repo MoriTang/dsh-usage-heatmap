@@ -268,8 +268,10 @@ export class DailyUsageStore {
       clearTimeout(this.flushTimer)
       this.flushTimer = undefined
     }
-    this.dirty = true
-    await this.writeChain
+    // Explicitly enqueue one final write: clearing the timer removed the only
+    // other trigger, so just setting dirty (as the previous version did) left
+    // the chain idle and the file stale. This forces run() onto the chain.
+    await this.flush()
   }
 }
 
