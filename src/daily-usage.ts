@@ -19,7 +19,7 @@ function usageTokenTotal(usage: TokenUsage): number {
   return usage.inputTokens
     + (usage.cacheReadTokens ?? 0)
     + (usage.cacheWriteTokens ?? 0)
-    + usage.outputTokens
+    + (usage.outputTokens ?? 0)
 }
 
 /** The model a `request/header` snapshot carries, or undefined. */
@@ -44,9 +44,18 @@ export interface DayTotals {
 
 const zeroDay = (): DayTotals => ({ tokens: 0, byModel: {} })
 
+/** The most recent contribution a session made, so a same-step replacement can subtract it. */
+interface LastContribution {
+  turn: number
+  step: number
+  day: string
+  model: string
+  tokens: number
+}
+
 /** Persisted shape: version + per-day totals. */
 interface Persisted {
-  version: 5
+  version: 6
   days: Record<string, DayTotals>
 }
 
@@ -55,17 +64,36 @@ interface Persisted {
  *
  * Subscribes to `session/event` and folds every usage-bearing event into the
  * local calendar day it belongs to, attributing each sample to the model named
- * by the most recent `request/header` snapshot. On startup it also backfills
- * all PERSISTED session logs, so usage from before the plugin was installed is
- * counted. Dedup is keyed by (sessionId, turn, step); the live firehose never
- * double-counts against the backfilled log of the same session.
+ * by the most recent `request/header` snapshot. A repeated usage sample for
+ * the SAME (session, turn, step) — a stream usage chunk followed by the final
+ * assistant/message usage — REPLACES the earlier contribution instead of
+ * double-counting (the token-meter invariant). On startup it also backfills
+ * all PERSISTED session logs through {@link backfill}, so usage from before
+ * the plugin was installed is counted.
  */
 export class DailyUsageStore {
   private readonly days = new Map<string, DayTotals>()
-  private readonly lastStep = new Map<SessionId, { turn: number; step: number }>()
+  private readonly lastContribution = new Map<SessionId, LastContribution>()
   private readonly currentModel = new Map<SessionId, string>()
   private flushTimer: ReturnType<typeof setTimeout> | undefined
   private readonly filename = dshHomePath('usage-heatmap', 'daily-usage.json')
+
+  /**
+   * Adopt another store's full state, replacing this instance's. Used at
+   * startup to swap in a freshly backfilled accumulator atomically — the
+   * persistent store never exposes a half-rebuilt view.
+   */
+  adopt(other: DailyUsageStore): void {
+    this.days.clear()
+    for (const [day, value] of other.days) {
+      this.days.set(day, { tokens: value.tokens, byModel: { ...value.byModel } })
+    }
+    this.lastContribution.clear()
+    for (const [id, c] of other.lastContribution) this.lastContribution.set(id, { ...c })
+    this.currentModel.clear()
+    for (const [id, model] of other.currentModel) this.currentModel.set(id, model)
+    this.scheduleFlush()
+  }
 
   /** Load the persisted history (best-effort; a missing/corrupt file starts empty). */
   async load(): Promise<void> {
@@ -73,7 +101,7 @@ export class DailyUsageStore {
       const { readFile } = await import('node:fs/promises')
       const raw = await readFile(this.filename, 'utf8')
       const parsed = JSON.parse(raw) as Partial<Persisted>
-      if (parsed.version !== 5 || typeof parsed.days !== 'object' || parsed.days === null) return
+      if (parsed.version !== 6 || typeof parsed.days !== 'object' || parsed.days === null) return
       for (const [day, value] of Object.entries(parsed.days)) {
         if (!isDayTotals(value)) continue
         this.days.set(day, { tokens: value.tokens, byModel: { ...value.byModel } })
@@ -88,7 +116,7 @@ export class DailyUsageStore {
   beginBackfill(): void {
     this.days.clear()
     this.currentModel.clear()
-    this.lastStep.clear()
+    this.lastContribution.clear()
   }
 
   /** Backfill from one persisted session's event log. */
@@ -114,19 +142,40 @@ export class DailyUsageStore {
 
     const sample = usageOf(event)
     if (sample === undefined) return false
-    const prev = this.lastStep.get(sessionId)
-    if (prev !== undefined && prev.turn === sample.turn && prev.step === sample.step) return false
-    this.lastStep.set(sessionId, { turn: sample.turn, step: sample.step })
-
+    const prev = this.lastContribution.get(sessionId)
+    const sameStep = prev !== undefined && prev.turn === sample.turn && prev.step === sample.step
+    const tokens = usageTokenTotal(sample.usage)
     const day = dayKey(event.time)
-    const totals = this.days.get(day) ?? zeroDay()
-    const total = usageTokenTotal(sample.usage)
-    totals.tokens += total
     const model = this.currentModel.get(sessionId) ?? 'unknown'
-    totals.byModel[model] = (totals.byModel[model] ?? 0) + total
-    this.days.set(day, totals)
+
+    if (sameStep) {
+      // Replace the earlier sample for this step: subtract it, add the new one.
+      this.addContribution(prev!.day, prev!.model, -prev!.tokens)
+      this.lastContribution.set(sessionId, { turn: sample.turn, step: sample.step, day, model, tokens })
+      this.addContribution(day, model, tokens)
+    } else {
+      this.lastContribution.set(sessionId, { turn: sample.turn, step: sample.step, day, model, tokens })
+      this.addContribution(day, model, tokens)
+    }
     this.scheduleFlush()
     return true
+  }
+
+  /** Add a signed token delta to one day's grand total and model bucket. */
+  private addContribution(day: string, model: string, delta: number): void {
+    const totals = this.days.get(day) ?? zeroDay()
+    totals.tokens += delta
+    const next = (totals.byModel[model] ?? 0) + delta
+    if (next === 0) {
+      delete totals.byModel[model]
+    } else {
+      totals.byModel[model] = next
+    }
+    if (totals.tokens <= 0 && Object.keys(totals.byModel).length === 0) {
+      this.days.delete(day)
+    } else {
+      this.days.set(day, totals)
+    }
   }
 
   /** Ordered day list (oldest first) plus the whole-history total. */
@@ -157,7 +206,7 @@ export class DailyUsageStore {
     const days: Record<string, DayTotals> = {}
     for (const [day, value] of this.days) days[day] = value
     try {
-      await writeFileAtomic(this.filename, JSON.stringify({ version: 5, days }, null, 2), { mode: 0o600, dirMode: 0o700 })
+      await writeFileAtomic(this.filename, JSON.stringify({ version: 6, days }, null, 2), { mode: 0o600, dirMode: 0o700 })
     } catch {
       // Persistence failure must never crash the session pipeline; the next
       // consume schedules another flush.

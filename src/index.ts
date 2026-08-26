@@ -5,6 +5,7 @@ import type { IncomingMessage } from 'node:http'
 import type {} from '@deepseek-ai/dsh-host-webserver'
 // Type-only: pulls the timer service mixin (ctx.setInterval) into Context.
 import type {} from '@deepseek-ai/cordis-plugin-timer'
+import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
 import { credentialRef, type CredentialRef } from '@deepseek-ai/dsh-credentials'
 import { z } from 'zod'
 import { DailyUsageStore } from './daily-usage.ts'
@@ -66,40 +67,64 @@ export function apply(ctx: Context, config: Config): void {
   // Daily history: fold usage-bearing events per local day, persisted with a
   // debounced atomic rewrite. Committed events only — no replay double-count.
   const store = new DailyUsageStore()
-  void store.load()
 
-  // Backfill persisted session logs so usage from before this plugin was
-  // installed is counted (the live `session/event` firehose only sees events
-  // committed after mount). Best-effort: a missing persistence service or a
-  // failed read keeps the live counter running on top of the loaded file.
-  void (async () => {
-    const persistence = ctx.get('sessionPersistence')
-    if (persistence === undefined) return
-    try {
-      const sessions = await persistence.list()
-      // Logs are authoritative: recompute from scratch, discarding the file.
-      store.beginBackfill()
-      for (const meta of sessions) {
-        try {
-          // Skip seed events (fork/resume lineage): their usage belongs to the
-          // ancestor session that first produced them, not this child.
-          const fromSeq = meta.seedLength ?? 0
-          const { events } = await persistence.readFrom(meta.id, fromSeq)
-          store.backfill(meta.id, events)
-        } catch {
-          // Skip a session that fails to read; the live counter still runs.
-        }
-      }
-      await store.dispose() // flush the backfilled totals to disk
-    } catch {
-      // Listing failure is non-fatal: keep the loaded file + live counter.
-    }
-  })()
+  // Startup sequencing guards against three-way races between the persisted
+  // file load, the session-log backfill, and live events:
+  //   1. live events are buffered (not folded) until initialization settles;
+  //   2. backfill runs in a SEPARATE accumulator, never touching `store`;
+  //   3. on success `store.adopt(acc)` swaps the rebuilt history in atomically,
+  //      then the buffered live events replay on top.
+  // A backfill failure keeps the file-loaded state and still replays buffered
+  // events, so a bad read never clobbers good data.
+  const pendingLive: Array<{ session: Session; event: SessionEvent }> = []
+  let ready = false
+  const replayPending = (): void => {
+    for (const { session, event } of pendingLive) store.consume(session, event)
+    pendingLive.length = 0
+    ready = true
+  }
 
   ctx.on('session/event', (session, event) => {
+    if (!ready) {
+      pendingLive.push({ session, event })
+      return
+    }
     store.consume(session, event)
   })
   ctx.effect(() => () => { void store.dispose() }, 'usage-heatmap: daily usage flush')
+
+  void (async () => {
+    await store.load()
+    const persistence = ctx.get('sessionPersistence')
+    if (persistence !== undefined) {
+      try {
+        const sessions = await persistence.list()
+        // Rebuild history in an isolated accumulator. If ANY session read
+        // fails, abort the whole backfill and keep the file-loaded state —
+        // never persist a partially rebuilt history as if it were complete.
+        const acc = new DailyUsageStore()
+        acc.beginBackfill()
+        let failed = false
+        for (const meta of sessions) {
+          try {
+            // Skip seed events (fork/resume lineage): their usage belongs to
+            // the ancestor session that first produced them, not this child.
+            const fromSeq = meta.seedLength ?? 0
+            const { events } = await persistence.readFrom(meta.id, fromSeq)
+            acc.backfill(meta.id, events)
+          } catch {
+            failed = true
+            break
+          }
+        }
+        if (!failed) store.adopt(acc)
+      } catch {
+        // Listing failure is non-fatal: keep the loaded file + live counter.
+      }
+    }
+    await store.dispose() // persist the settled initial state
+    replayPending()
+  })()
 
   // Balance cache + periodic refresh. The route serves whatever the last
   // successful refresh produced; failures keep the previous value and log.
