@@ -74,8 +74,8 @@ node build.mjs        # 生成 lib/index.js + lib/client.js（需要 harness 内
 
 ```sh
 # 从 harness checkout 运行
-cd /Users/mori/src/deepseek-harness
-pnpm dsh plugin --profile web add /Users/mori/src/dsh/plugins/usage-heatmap
+cd <harness-checkout>   # 例如 ../deepseek-harness（本仓库同级目录）
+pnpm dsh plugin --profile web add <本仓库>/plugins/usage-heatmap
 ```
 
 ### 3. 挂载

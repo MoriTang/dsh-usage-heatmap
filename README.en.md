@@ -81,8 +81,8 @@ node build.mjs        # Generate lib/index.js + lib/client.js (requires esbuild 
 
 ```sh
 # Run from the harness checkout
-cd /Users/mori/src/deepseek-harness
-pnpm dsh plugin --profile web add /Users/mori/src/dsh/plugins/usage-heatmap
+cd <harness-checkout>   # e.g. ../deepseek-harness (sibling of this repo)
+pnpm dsh plugin --profile web add <this-repo>/plugins/usage-heatmap
 ```
 
 ### 3. Mount the plugin
