@@ -3,7 +3,7 @@
  * Run from the harness checkout so `tsx` is resolvable:
  *
  *   node --import tsx/esm --test \
- *     /Users/mori/src/dsh/plugins/usage-heatmap/tests/daily-usage.test.ts
+ *     <repo>/plugins/usage-heatmap/tests/daily-usage.test.ts
  */
 import assert from 'node:assert/strict'
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
