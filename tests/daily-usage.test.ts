@@ -1,9 +1,6 @@
 /**
  * Unit tests for DailyUsageStore's event folding and persistence invariants.
- * Run from the harness checkout so `tsx` is resolvable:
- *
- *   node --import tsx/esm --test \
- *     <repo>/plugins/usage-heatmap/tests/daily-usage.test.ts
+ * Run from the plugin directory: `npm test`.
  */
 import assert from 'node:assert/strict'
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'

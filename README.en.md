@@ -126,9 +126,9 @@ without a restart.
 ## Tests
 
 ```sh
-# Run from the harness checkout so `tsx` resolves; <this-repo> is this plugins
-# repository's path
-node --import tsx/esm --test <this-repo>/plugins/usage-heatmap/tests/daily-usage.test.ts
+cd plugins/usage-heatmap     # from this repository's root
+pnpm install
+npm test
 ```
 
 11 cases cover `DailyUsageStore` invariants: dual usage-event extraction and
@@ -138,7 +138,6 @@ per-session accumulation, snapshot ordering/truncation/detached copies,
 backfill watermarks, `persist:false` zero-write, `adopt` copy semantics,
 `dispose` synchronous flush + reload consistency, and `load` tolerance.
 
-## Known Limitations
 ## Known Limitations
 
 - **Refresh the page after changing client source code; restart after changing

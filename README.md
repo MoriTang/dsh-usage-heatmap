@@ -117,8 +117,9 @@ pnpm dsh plugin --profile web add <本仓库>/plugins/usage-heatmap
 ## 测试
 
 ```sh
-# 从 harness checkout 目录运行（tsx 可解析）；<本仓库> 指本插件仓库路径
-node --import tsx/esm --test <本仓库>/plugins/usage-heatmap/tests/daily-usage.test.ts
+cd plugins/usage-heatmap     # 从本仓库根目录
+pnpm install
+npm test
 ```
 
 11 个用例覆盖 `DailyUsageStore` 的核心不变量：双 usage 事件提取与全字段求和、
@@ -126,7 +127,6 @@ node --import tsx/esm --test <本仓库>/plugins/usage-heatmap/tests/daily-usage
 独立累计、snapshot 排序/截断/拷贝、backfill 水位、`persist:false` 零写入、
 `adopt` 拷贝语义、`dispose` 同步落盘 + 重载一致、load 容错。
 
-## 已知限制
 ## 已知限制
 
 - **改 client 源码刷新页面即可，改 host 源码需重启**：web profile 禁用了模块级

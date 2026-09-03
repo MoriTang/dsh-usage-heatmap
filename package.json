@@ -25,7 +25,8 @@
     "@types/react-dom": "link:../../../deepseek-harness/node_modules/.pnpm/node_modules/@types/react-dom",
     "react": "link:../../../deepseek-harness/node_modules/.pnpm/node_modules/react",
     "typescript": "link:../../../deepseek-harness/node_modules/.pnpm/node_modules/typescript",
-    "@deepseek-ai/dsh-client-ui-renderer": "link:../../../deepseek-harness/packages/client/ui-renderer"
+    "@deepseek-ai/dsh-client-ui-renderer": "link:../../../deepseek-harness/packages/client/ui-renderer",
+    "tsx": "link:../../../deepseek-harness/node_modules/.pnpm/tsx@4.22.4/node_modules/tsx"
   },
   "exports": {
     ".": {
@@ -48,5 +49,8 @@
         "@deepseek-ai/dsh-client-ui-slots"
       ]
     }
+  },
+  "scripts": {
+    "test": "node --import tsx/esm --test tests/*.test.ts"
   }
 }

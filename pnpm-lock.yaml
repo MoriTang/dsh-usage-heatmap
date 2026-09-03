@@ -60,6 +60,9 @@ importers:
       react:
         specifier: link:../../../deepseek-harness/node_modules/.pnpm/node_modules/react
         version: link:../../../deepseek-harness/node_modules/.pnpm/node_modules/react
+      tsx:
+        specifier: link:../../../deepseek-harness/node_modules/.pnpm/tsx@4.22.4/node_modules/tsx
+        version: link:../../../deepseek-harness/node_modules/.pnpm/tsx@4.22.4/node_modules/tsx
       typescript:
         specifier: link:../../../deepseek-harness/node_modules/.pnpm/node_modules/typescript
         version: link:../../../deepseek-harness/node_modules/.pnpm/node_modules/typescript
