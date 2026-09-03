@@ -114,6 +114,19 @@ pnpm dsh plugin --profile web add <本仓库>/plugins/usage-heatmap
   应返回 200 和 `window.__ModuleLoader__.load({...})`。
 - **类型检查**：`cd plugins/usage-heatmap && pnpm exec tsc --noEmit`。
 
+## 测试
+
+```sh
+# 从 harness checkout 目录运行（tsx 可解析）；<本仓库> 指本插件仓库路径
+node --import tsx/esm --test <本仓库>/plugins/usage-heatmap/tests/daily-usage.test.ts
+```
+
+11 个用例覆盖 `DailyUsageStore` 的核心不变量：双 usage 事件提取与全字段求和、
+模型归因（header 切换/unknown）、同 (turn, step) 替换（含归零清理）、多会话
+独立累计、snapshot 排序/截断/拷贝、backfill 水位、`persist:false` 零写入、
+`adopt` 拷贝语义、`dispose` 同步落盘 + 重载一致、load 容错。
+
+## 已知限制
 ## 已知限制
 
 - **改 client 源码刷新页面即可，改 host 源码需重启**：web profile 禁用了模块级

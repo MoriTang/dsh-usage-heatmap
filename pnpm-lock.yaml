@@ -36,12 +36,12 @@ importers:
       '@deepseek-ai/cordis-plugin-timer':
         specifier: link:../../../deepseek-harness/vendor/timer
         version: link:../../../deepseek-harness/vendor/timer
-      '@deepseek-ai/dsh-client-runtime':
-        specifier: link:../../../deepseek-harness/packages/client/runtime
-        version: link:../../../deepseek-harness/packages/client/runtime
       '@deepseek-ai/dsh-client-ui-primitives':
         specifier: link:../../../deepseek-harness/packages/client/ui-primitives
         version: link:../../../deepseek-harness/packages/client/ui-primitives
+      '@deepseek-ai/dsh-client-ui-renderer':
+        specifier: link:../../../deepseek-harness/packages/client/ui-renderer
+        version: link:../../../deepseek-harness/packages/client/ui-renderer
       '@deepseek-ai/dsh-client-ui-settings':
         specifier: link:../../../deepseek-harness/packages/client/ui-settings
         version: link:../../../deepseek-harness/packages/client/ui-settings

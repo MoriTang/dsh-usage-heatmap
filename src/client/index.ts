@@ -1,6 +1,7 @@
-import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
+import type { Context } from '@deepseek-ai/cordis'
 // Type-only: pulls the ui-settings SlotMap merge (settings.section) through
 // the Client assembly boundary.
+import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-client-ui-slots'
 import { UsageHeatmapSection } from './UsageHeatmapSection.tsx'
@@ -14,7 +15,7 @@ export const inject = ['slots']
  * map plus balance/token summary cards, fed by the host's
  * `/usage-heatmap/history` route.
  */
-export function apply(ctx: ClientContext): void {
+export function apply(ctx: Context): void {
   ctx.slots.inject('settings.section', () => ctx.slots.register({
     name: 'settings.section',
     id: 'usage-heatmap',

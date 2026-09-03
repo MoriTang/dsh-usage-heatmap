@@ -123,6 +123,22 @@ without a restart.
   should return HTTP 200 and `window.__ModuleLoader__.load({...})`.
 - **Type checking**: `cd plugins/usage-heatmap && pnpm exec tsc --noEmit`.
 
+## Tests
+
+```sh
+# Run from the harness checkout so `tsx` resolves; <this-repo> is this plugins
+# repository's path
+node --import tsx/esm --test <this-repo>/plugins/usage-heatmap/tests/daily-usage.test.ts
+```
+
+11 cases cover `DailyUsageStore` invariants: dual usage-event extraction and
+full-field summation, model attribution (header switches / `unknown`),
+same-(turn, step) replacement (including zero-out cleanup), independent
+per-session accumulation, snapshot ordering/truncation/detached copies,
+backfill watermarks, `persist:false` zero-write, `adopt` copy semantics,
+`dispose` synchronous flush + reload consistency, and `load` tolerance.
+
+## Known Limitations
 ## Known Limitations
 
 - **Refresh the page after changing client source code; restart after changing

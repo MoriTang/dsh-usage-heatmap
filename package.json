@@ -17,7 +17,6 @@
   "devDependencies": {
     "@deepseek-ai/cordis": "link:../../../deepseek-harness/vendor/cordis",
     "@deepseek-ai/cordis-plugin-timer": "link:../../../deepseek-harness/vendor/timer",
-    "@deepseek-ai/dsh-client-runtime": "link:../../../deepseek-harness/packages/client/runtime",
     "@deepseek-ai/dsh-client-ui-primitives": "link:../../../deepseek-harness/packages/client/ui-primitives",
     "@deepseek-ai/dsh-client-ui-settings": "link:../../../deepseek-harness/packages/client/ui-settings",
     "@deepseek-ai/dsh-client-ui-slots": "link:../../../deepseek-harness/packages/client/ui-slots",
@@ -25,7 +24,8 @@
     "@types/react": "link:../../../deepseek-harness/node_modules/.pnpm/node_modules/@types/react",
     "@types/react-dom": "link:../../../deepseek-harness/node_modules/.pnpm/node_modules/@types/react-dom",
     "react": "link:../../../deepseek-harness/node_modules/.pnpm/node_modules/react",
-    "typescript": "link:../../../deepseek-harness/node_modules/.pnpm/node_modules/typescript"
+    "typescript": "link:../../../deepseek-harness/node_modules/.pnpm/node_modules/typescript",
+    "@deepseek-ai/dsh-client-ui-renderer": "link:../../../deepseek-harness/packages/client/ui-renderer"
   },
   "exports": {
     ".": {
@@ -43,8 +43,8 @@
     "client": {
       "platform": "web",
       "inject": [
-        "@deepseek-ai/dsh-client-runtime",
         "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-renderer",
         "@deepseek-ai/dsh-client-ui-slots"
       ]
     }
