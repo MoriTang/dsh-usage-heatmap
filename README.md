@@ -169,8 +169,3 @@ pnpm test
   估算金额，避免与官网账单不符。
 - 插件 `name` 必须是**包名**（`dsh-usage-heatmap`），因为 client modules
   按包名扫描 `dsh.client` 声明。
-
-## 下一步
-
-- [添加设置卡片](https://deepseek-harness.github.io/deepseek-harness/reference/cookbook/adding-a-settings-card)
-- [打包与安装](https://deepseek-harness.github.io/deepseek-harness/develop/basic/publish)

@@ -186,8 +186,3 @@ backfill watermarks, `persist:false` zero-write, `adopt` copy semantics,
   discrepancies with official billing.
 - The plugin `name` must be the **package name** (`dsh-usage-heatmap`) because
   client modules scan `dsh.client` declarations by package name.
-
-## Next Steps
-
-- [Add a settings card](https://deepseek-harness.github.io/deepseek-harness/en/reference/cookbook/adding-a-settings-card)
-- [Package and install](https://deepseek-harness.github.io/deepseek-harness/en/develop/basic/publish)
