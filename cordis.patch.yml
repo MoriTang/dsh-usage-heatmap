@@ -1,0 +1,9 @@
+# Mount the host half; package metadata contributes the matching Web client.
+- insert:
+    - id: usage-heatmap
+      name: 'dsh-usage-heatmap'
+      config:
+        apiKeyEnv: 'DEEPSEEK_API_KEY'
+        baseURL: 'https://api.deepseek.com'
+        refreshMs: 60000
+        historyDays: 365

@@ -16,13 +16,8 @@ import { writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-// esbuild is not a dependency of this package; it lives in the harness
-// checkout's pnpm store (the registry is not reachable, so no install here).
-// Load it by its store path, which the harness's .pnpm virtual store exposes.
-const require = createRequire(
-  '/Users/mori/src/deepseek-harness/node_modules/.pnpm/node_modules/esbuild/lib/main.js',
-)
-const { build } = require('esbuild')
+const localRequire = createRequire(import.meta.url)
+const { build } = localRequire('esbuild')
 
 const root = dirname(fileURLToPath(import.meta.url))
 const PKG_ID = 'dsh-usage-heatmap'
@@ -34,7 +29,6 @@ const CLIENT_EXTERNALS = [
   'react-dom',
   'react-dom/client',
   '@deepseek-ai/cordis',
-  '@deepseek-ai/dsh-client-runtime/client',
   '@deepseek-ai/dsh-client-ui-slots',
   '@deepseek-ai/dsh-client-ui-primitives',
 ]
@@ -48,7 +42,7 @@ await build({
   bundle: true,
   platform: 'node',
   format: 'esm',
-  target: 'node20',
+  target: 'node22',
   external: ['node:*', ...CLIENT_EXTERNALS.filter(s => s.startsWith('@deepseek-ai/'))],
 })
 

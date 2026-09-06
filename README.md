@@ -9,7 +9,7 @@ GitHub contributions 的**每日 token 消耗热力图**，以及账户余额与
 
 - **每日 token 热力图**：按本地日历聚合每次 LLM 请求的 token 用量
   （input + output + cache-read + cache-write），一格代表一天，消耗越多
-  颜色越深（4 档色阶，与当日峰值归一化）。
+  颜色越亮（4 档固定对数色阶）。
 - **汇总卡片**：Total balance、全周期 Token 总量。
 - **窗口统计**：热力图下方显示最近 N 天的总 token 数。
 - **数据跨重启持久化**：每日历史原子写入
@@ -27,8 +27,9 @@ GitHub contributions 的**每日 token 消耗热力图**，以及账户余额与
 | 每日 token 历史 | **host 聚合 + webserver 路由** | host 监听 `session/event`，把 usage 事件按天折叠、原子持久化；浏览器经 `/usage-heatmap/history` 轮询读取。 |
 | 账户余额 | **webserver 路由** | host 周期调用 DeepSeek `GET /user/balance` 并缓存，随 history 路由一并返回。 |
 
-历史与余额都是全局账户事实，不是会话日志折叠，因此不走 projection
-（纯事件折叠），也不污染 durable 会话日志。
+历史是从持久化会话日志和实时 usage 事件构建的账户级物化汇总，余额也是账户级
+数据；两者都不属于单个会话 projection，因此由独立 Web 路由提供，且不会向
+durable 会话日志写入合成事件。
 
 ```
 ┌─ host (node) ───────────────────────────┐   ┌─ browser ──────────────────┐
@@ -43,9 +44,11 @@ GitHub contributions 的**每日 token 消耗热力图**，以及账户余额与
 ## 目录结构
 
 ```
-plugins/usage-heatmap/
+dsh-usage-heatmap/
 ├── package.json              # 私有包；dsh.client 声明；exports["./client"]
+├── cordis.patch.yml          # bundle 安装时自动挂载 host 半
 ├── tsconfig.json             # 编辑器类型检查
+├── tsconfig.build.json       # 声明文件构建
 ├── build.mjs                 # esbuild 构建 host bundle + client bundle
 ├── src/
 │   ├── index.ts              # host 半：每日聚合 + 余额查询 + history 路由
@@ -59,50 +62,75 @@ plugins/usage-heatmap/
 
 ## 安装
 
-`@deepseek-ai/*` 依赖通过 `link:` 指向本地 harness checkout
-（`../../../deepseek-harness`）—— 工作区包不发布到 registry。
-
-### 1. 构建产物（client bundle 必须已构建）
+仓库已经提交 host、client 和类型声明构建产物。使用者不需要在插件目录运行
+`pnpm install` 或重新构建：
 
 ```sh
-cd plugins/usage-heatmap
-pnpm install          # 物化 link:-ed 依赖
-node build.mjs        # 生成 lib/index.js + lib/client.js（需要 harness 内的 esbuild）
+git clone https://github.com/MoriTang/dsh-usage-heatmap.git
 ```
 
-### 2. 安装到 web profile
+从 Harness checkout 注册到 `web` profile：
 
 ```sh
-# 从 harness checkout 运行
-cd <harness-checkout>   # 例如 ../deepseek-harness（本仓库同级目录）
-pnpm dsh plugin --profile web add <本仓库>/plugins/usage-heatmap
+cd /path/to/deepseek-harness
+pnpm dsh plugin --profile web add /absolute/path/to/dsh-usage-heatmap
 ```
 
-### 3. 挂载
+`cordis.patch.yml` 会自动挂载 host 半，package manifest 会加载 Web client half。
+注册后重启 `pnpm dsh web`。
 
-在 `~/.dsh/profiles/web/cordis.patch.yml` 追加：
+卸载时运行：
 
-```yaml
-- insert:
-    - id: usage-heatmap
-      name: 'dsh-usage-heatmap'
-      config:
-        apiKeyEnv: 'DEEPSEEK_API_KEY'
-        baseURL: 'https://api.deepseek.com'
-        refreshMs: 60000
-        historyDays: 90
+```sh
+pnpm dsh plugin --profile web remove dsh-usage-heatmap
 ```
 
-保存后 host 半热加载；刷新浏览器页面，设置菜单即出现「Usage」项。
+## 开发
+
+源码开发需要 DeepSeek Harness checkout。把两个仓库放在同一父目录中：
+
+```text
+src/
+├── deepseek-harness/
+└── dsh-usage-heatmap/
+```
+
+插件的 DSH 开发依赖通过 `link:../deepseek-harness/...` 使用该 checkout；普通
+构建工具来自 npm：
+
+```sh
+cd /path/to/dsh-usage-heatmap
+pnpm install
+pnpm run typecheck
+pnpm test
+pnpm run build
+```
+
+当前版本面向 DeepSeek Harness `0.1.2-alpha.2` 系列。Harness 尚未发布稳定兼容
+承诺，升级 Harness 后应重新运行以上检查并验证 Web UI。
 
 ## 配置
+
+bundle 已提供默认配置。需要覆盖时，在 `~/.dsh/profiles/web/cordis.patch.yml`
+按 Loader id 添加配置；不要再次使用 `insert`：
+
+```yaml
+- id: usage-heatmap
+  config:
+    apiKeyEnv: 'DEEPSEEK_API_KEY'
+    baseURL: 'https://api.deepseek.com'
+    refreshMs: 60000
+    historyDays: 90
+```
+
+保存后配置热加载；刷新浏览器页面，设置菜单即出现「Usage」项。
 
 | 字段 | 默认 | 说明 |
 |---|---|---|
 | `apiKeyEnv` | `DEEPSEEK_API_KEY` | API key 的凭证引用（环境变量名） |
 | `baseURL` | `https://api.deepseek.com` | API 端点基址，`/user/balance` 追加其后 |
 | `refreshMs` | `60000` | 余额刷新间隔（毫秒） |
-| `historyDays` | `90` | 热力图展示的最近天数 |
+| `historyDays` | `365` | 热力图展示的最近天数 |
 
 改动配置保存即热生效（config-only HMR），无需重启。
 
@@ -112,14 +140,14 @@ pnpm dsh plugin --profile web add <本仓库>/plugins/usage-heatmap
   `{"days":[{date,tokens}...],"totals":{"tokens":...},"balance":{...},"checkedAt":...,"lastError":null}`。
 - **client bundle**：`curl http://127.0.0.1:3080/plugins/dsh-usage-heatmap/client.js`
   应返回 200 和 `window.__ModuleLoader__.load({...})`。
-- **类型检查**：`cd plugins/usage-heatmap && pnpm exec tsc --noEmit`。
+- **类型检查**：`pnpm run typecheck`。
 
 ## 测试
 
 ```sh
-cd plugins/usage-heatmap     # 从本仓库根目录
+cd /path/to/dsh-usage-heatmap
 pnpm install
-npm test
+pnpm test
 ```
 
 11 个用例覆盖 `DailyUsageStore` 的核心不变量：双 usage 事件提取与全字段求和、
@@ -133,8 +161,8 @@ npm test
   HMR，修改 `src/client/*` 后重新构建并**刷新浏览器页面**即生效；修改 host 半
   （`src/index.ts`、`src/daily-usage.ts`）需重启 `dsh web`。`cordis.patch.yml`
   配置编辑可热重载，无需重启。
-- **历史只从插件启用后累计**：仅记录插件挂载期间提交的 usage 事件；
-  已存在的历史文件在启动时加载，但不会回填启用前产生的会话。
+- **历史来源**：启动时从持久化 session 日志回填；插件运行期间继续累计实时
+  usage 事件。无法读取某个会话时保留上次成功写入的历史文件。
 - **余额只读**：只查询展示，不含充值/消费操作；接口失败时保留上次成功值
   并记录 `lastError`。
 - **无 Total Cost**：官方 API 不提供消费金额（见顶部说明），本插件有意不
