@@ -172,5 +172,5 @@ pnpm test
 
 ## 下一步
 
-- [添加设置卡片](https://deepseek-harness.github.io/docs/cookbook/adding-a-settings-card)
-- [打包与安装](https://deepseek-harness.github.io/docs/user/develop/basic/publish)
+- [添加设置卡片](https://deepseek-harness.github.io/deepseek-harness/reference/cookbook/adding-a-settings-card)
+- [打包与安装](https://deepseek-harness.github.io/deepseek-harness/develop/basic/publish)

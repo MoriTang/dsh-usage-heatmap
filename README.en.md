@@ -189,5 +189,5 @@ backfill watermarks, `persist:false` zero-write, `adopt` copy semantics,
 
 ## Next Steps
 
-- [Add a settings card](https://deepseek-harness.github.io/docs/cookbook/adding-a-settings-card)
-- [Package and install](https://deepseek-harness.github.io/docs/user/develop/basic/publish)
+- [Add a settings card](https://deepseek-harness.github.io/deepseek-harness/en/reference/cookbook/adding-a-settings-card)
+- [Package and install](https://deepseek-harness.github.io/deepseek-harness/en/develop/basic/publish)
