@@ -81,7 +81,7 @@
     "cordis.patch.yml",
     "LICENSE",
     "README.md",
-    "README.en.md"
+    "README.zh.md"
   ],
   "scripts": {
     "build": "node build.mjs && tsc -p tsconfig.build.json",
