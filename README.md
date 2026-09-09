@@ -11,8 +11,8 @@ token summaries.
 
 - **Daily token heatmap**: Aggregates token usage for each LLM request by local
   calendar day (input + output + cache-read + cache-write). Each cell represents
-  one day, and higher usage is shown with a brighter color across four fixed
-  logarithmic levels.
+  one day. A neutral empty state and four fixed logarithmic levels use GitHub's
+  mode-aware contribution palettes in light and dark themes.
 - **Summary cards**: Total balance and all-time Token total.
 - **Window statistics**: Displays the total token count for the most recent N
   days below the heatmap.

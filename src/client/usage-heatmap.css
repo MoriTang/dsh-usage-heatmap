@@ -1,0 +1,39 @@
+:root {
+  --dsh-usage-heatmap-level-0: rgb(0 0 0 / 9%);
+  --dsh-usage-heatmap-level-1: #9be9a8;
+  --dsh-usage-heatmap-level-2: #40c463;
+  --dsh-usage-heatmap-level-3: #30a14e;
+  --dsh-usage-heatmap-level-4: #216e39;
+  --dsh-usage-heatmap-cell-border: rgb(27 31 36 / 6%);
+}
+
+body[data-ds-dark-theme] {
+  --dsh-usage-heatmap-level-0: #161b22;
+  --dsh-usage-heatmap-level-1: #0e4429;
+  --dsh-usage-heatmap-level-2: #006d32;
+  --dsh-usage-heatmap-level-3: #26a641;
+  --dsh-usage-heatmap-level-4: #39d353;
+  --dsh-usage-heatmap-cell-border: rgb(240 246 252 / 3%);
+}
+
+[data-usage-heatmap-cell] {
+  border: 0;
+  background: var(--dsh-usage-heatmap-level-0);
+  box-shadow: inset 0 0 0 1px var(--dsh-usage-heatmap-cell-border);
+}
+
+[data-usage-heatmap-cell][data-level='1'] {
+  background: var(--dsh-usage-heatmap-level-1);
+}
+
+[data-usage-heatmap-cell][data-level='2'] {
+  background: var(--dsh-usage-heatmap-level-2);
+}
+
+[data-usage-heatmap-cell][data-level='3'] {
+  background: var(--dsh-usage-heatmap-level-3);
+}
+
+[data-usage-heatmap-cell][data-level='4'] {
+  background: var(--dsh-usage-heatmap-level-4);
+}

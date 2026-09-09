@@ -54,6 +54,7 @@ const client = await build({
   format: 'cjs',
   target: 'es2020',
   external: CLIENT_EXTERNALS,
+  loader: { '.css': 'text' },
   write: false,
 })
 

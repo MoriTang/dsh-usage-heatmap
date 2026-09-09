@@ -5,6 +5,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-client-ui-slots'
 import { UsageHeatmapSection } from './UsageHeatmapSection.tsx'
+import styleText from './usage-heatmap.css'
 
 /** Required services: slots (settings.section registration). */
 export const inject = ['slots']
@@ -16,6 +17,14 @@ export const inject = ['slots']
  * `/usage-heatmap/history` route.
  */
 export function apply(ctx: Context): void {
+  ctx.effect(() => {
+    const style = document.createElement('style')
+    style.dataset.dshUsageHeatmap = ''
+    style.textContent = styleText
+    document.head.append(style)
+    return () => { style.remove() }
+  })
+
   ctx.slots.inject('settings.section', () => ctx.slots.register({
     name: 'settings.section',
     id: 'usage-heatmap',

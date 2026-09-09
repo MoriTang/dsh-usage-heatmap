@@ -8,8 +8,8 @@ GitHub contributions 的**每日 token 消耗热力图**，以及账户余额与
 ## 功能
 
 - **每日 token 热力图**：按本地日历聚合每次 LLM 请求的 token 用量
-  （input + output + cache-read + cache-write），一格代表一天，消耗越多
-  颜色越亮（4 档固定对数色阶）。
+  （input + output + cache-read + cache-write），一格代表一天；空白档与
+  4 档固定对数色阶分别使用 GitHub 的明暗模式贡献色板。
 - **汇总卡片**：Total balance、全周期 Token 总量。
 - **窗口统计**：热力图下方显示最近 N 天的总 token 数。
 - **数据跨重启持久化**：每日历史原子写入

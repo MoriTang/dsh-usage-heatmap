@@ -30,8 +30,8 @@ export declare function formatTokens(n: number): string;
 /**
  * Heat-map grid, GitHub contributions style: one cell per day, rows are
  * weekdays and columns are weeks, with a month label row on top. Color
- * intensity scales with that day's token consumption relative to the peak day
- * in the window; hovering a cell shows its date and exact token count.
+ * intensity follows fixed logarithmic token buckets; hovering a cell shows
+ * its date and exact token count.
  *
  * The grid uses CSS Grid so every column stretches to share the container
  * width — 53 weeks fit one screen with no horizontal scrollbar, regardless of

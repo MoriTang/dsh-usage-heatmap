@@ -90,6 +90,7 @@ function heatLevel(value: number): number {
 /** Human label for one legend bucket (level 1..4, or the "Less"/"More" anchors). */
 function levelRangeLabel(level: number): string {
   switch (level) {
+    case 0: return 'No usage'
     case 1: return `< ${formatTokens(LEVEL_THRESHOLDS[0])}`
     case 2: return `${formatTokens(LEVEL_THRESHOLDS[0])}–${formatTokens(LEVEL_THRESHOLDS[1])}`
     case 3: return `${formatTokens(LEVEL_THRESHOLDS[1])}–${formatTokens(LEVEL_THRESHOLDS[2])}`
@@ -97,18 +98,6 @@ function levelRangeLabel(level: number): string {
     default: return ''
   }
 }
-
-/**
- * One hue (GitHub-green), four shades: lighter/brighter = more tokens,
- * darker = fewer. Level 0 stays a neutral fill for empty days.
- */
-const LEVEL_COLORS = [
-  'var(--dsw-alias-fill-l3)',
-  '#216e39',
-  '#30a14e',
-  '#40c463',
-  '#9be9a8',
-]
 
 const DAY_MS = 86_400_000
 
@@ -182,8 +171,8 @@ function buildGrid(days: HistoryDay[], windowDays: number): { cells: GridCell[];
 /**
  * Heat-map grid, GitHub contributions style: one cell per day, rows are
  * weekdays and columns are weeks, with a month label row on top. Color
- * intensity scales with that day's token consumption relative to the peak day
- * in the window; hovering a cell shows its date and exact token count.
+ * intensity follows fixed logarithmic token buckets; hovering a cell shows
+ * its date and exact token count.
  *
  * The grid uses CSS Grid so every column stretches to share the container
  * width — 53 weeks fit one screen with no horizontal scrollbar, regardless of
@@ -283,16 +272,20 @@ export function HeatmapLegend() {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 9, lineHeight: '12px', color: 'var(--dsw-alias-label-tertiary)' }}>
       <span>Less</span>
-      {[1, 2, 3, 4].map(level => (
-        <Tooltip key={level} label={`${levelRangeLabel(level)} tokens`} side="top">
+      {[0, 1, 2, 3, 4].map(level => (
+        <Tooltip
+          key={level}
+          label={level === 0 ? levelRangeLabel(level) : `${levelRangeLabel(level)} tokens`}
+          side="top"
+        >
           <span
+            data-usage-heatmap-cell
+            data-level={level}
             style={{
               display: 'block',
               width: 11,
               height: 11,
               borderRadius: 2,
-              background: LEVEL_COLORS[level],
-              border: '1px solid var(--dsw-alias-border-l1)',
               boxSizing: 'border-box',
             }}
           />
@@ -310,12 +303,12 @@ function Cell({ cell, level }: { cell: GridCell | null; level: number }) {
   // Future cells (padding to complete the last week) still draw a visible
   // level-0 square so the calendar rectangle stays complete.
   if (cell.future) {
-    return <span style={cellBaseStyle(LEVEL_COLORS[0])} />
+    return <span data-usage-heatmap-cell data-level={0} style={cellBaseStyle()} />
   }
   const label = cellTooltipLabel(cell)
   return (
     <Tooltip label={label} side="top">
-      <span style={cellBaseStyle(LEVEL_COLORS[level])} />
+      <span data-usage-heatmap-cell data-level={level} style={cellBaseStyle()} />
     </Tooltip>
   )
 }
@@ -331,18 +324,15 @@ function cellTooltipLabel(cell: GridCell): string {
 }
 
 /**
- * One day cell's visual: a bordered square. Level 0 keeps the light fill at
- * full opacity so empty days are still clearly visible, while level 1+ get a
- * solid color. The shared border makes every cell read as a grid square.
+ * One day cell's geometry. The injected stylesheet owns mode-aware GitHub
+ * contribution colors and a subtle inner edge independent of host themes.
  */
-function cellBaseStyle(background: string): React.CSSProperties {
+function cellBaseStyle(): React.CSSProperties {
   return {
     display: 'block',
     width: '100%',
     aspectRatio: '1',
     borderRadius: 2,
-    background,
-    border: '1px solid var(--dsw-alias-border-l1)',
     boxSizing: 'border-box',
     cursor: 'pointer',
   }
