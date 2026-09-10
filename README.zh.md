@@ -5,6 +5,16 @@
 GitHub contributions 的**每日 token 消耗热力图**，以及账户余额与 token
 总量汇总。
 
+## 预览
+
+### 浅色
+
+![浅色主题下的用量热力图](assets/usage-heatmap-light.png)
+
+### 深色
+
+![深色主题下的用量热力图](assets/usage-heatmap-dark.png)
+
 ## 功能
 
 - **每日 token 热力图**：按本地日历聚合每次 LLM 请求的 token 用量

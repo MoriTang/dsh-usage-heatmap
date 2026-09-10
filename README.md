@@ -7,6 +7,16 @@ It adds a “Usage” item to the settings menu, displaying a **daily token usag
 heatmap** similar to GitHub contributions, along with account balance and total
 token summaries.
 
+## Preview
+
+### Light
+
+![Usage heatmap in the light theme](assets/usage-heatmap-light.png)
+
+### Dark
+
+![Usage heatmap in the dark theme](assets/usage-heatmap-dark.png)
+
 ## Features
 
 - **Daily token heatmap**: Aggregates token usage for each LLM request by local
